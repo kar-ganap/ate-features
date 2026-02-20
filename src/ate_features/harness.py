@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 from ate_features.models import (
@@ -315,3 +316,43 @@ def _scaffold_session(
     created.append(notes_path)
 
     return created
+
+
+# --- Patch Management ---
+
+
+def apply_patch(patch_path: Path, langgraph_dir: Path) -> bool:
+    """Apply a patch file to the LangGraph directory.
+
+    Runs --check first to verify, then applies. Returns True on success.
+    """
+    check = subprocess.run(
+        ["git", "apply", "--check", str(patch_path)],
+        cwd=langgraph_dir,
+        capture_output=True,
+    )
+    if check.returncode != 0:
+        return False
+
+    result = subprocess.run(
+        ["git", "apply", str(patch_path)],
+        cwd=langgraph_dir,
+        capture_output=True,
+    )
+    return result.returncode == 0
+
+
+def revert_langgraph(langgraph_dir: Path) -> None:
+    """Revert LangGraph directory to clean state (checkout + clean)."""
+    subprocess.run(
+        ["git", "checkout", "."],
+        cwd=langgraph_dir,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "clean", "-fd"],
+        cwd=langgraph_dir,
+        check=True,
+        capture_output=True,
+    )
