@@ -48,10 +48,10 @@ See `../ate/docs/findings.md` for the full writeup.
 | F2 | Generic Pydantic v2 type round-trip in checkpoint serde | serializer |
 | F3 | StrEnum preservation in checkpoint serde | serializer |
 | F4 | Nested Enum deserialization fix | serializer |
-| F5 | Pydantic state with aliased fields | state |
-| F6 | Dataclass defaults with reducer | state |
-| F7 | END routing in conditional edges | graph |
-| F8 | messages_key streaming filter | streaming |
+| F5 | Reducer metadata ordering dependency | state |
+| F6 | BinaryOperatorAggregate ignores default_factory | state |
+| F7 | Nested message detection in stream_mode=messages | streaming |
+| F8 | Input message dedup for nested structures | streaming |
 
 ## 4. Acceptance Test Design
 
@@ -61,9 +61,10 @@ Tiered methodology creating a quality gradient:
 - **T2 (Edge Cases)**: Does it handle boundary conditions? First approach may fail.
 - **T3 (Quality)**: Is it robust, performant, and maintainer-acceptable? First
   approach probably fails.
+- **T4 (Smoke/Integration)**: End-to-end realistic multi-node workflows with
+  checkpointer. Tests behavioral correctness in production-like scenarios.
 
-Acceptance test suites written in Phase 1. Existing PR solutions (if any) should
-fail T2/T3.
+Acceptance test suites written in Phase 1. All tests FAIL against pinned commit.
 
 ## 5. Prompt Design
 
@@ -95,10 +96,10 @@ No hints about existing PRs, discussions, or solution approaches.
 
 | Agent | Features | Rationale |
 |-------|----------|-----------|
-| 1 | F1, F5 | serializer/new + state/pydantic |
+| 1 | F1, F5 | serializer/new + state/metadata |
 | 2 | F2, F6 | serializer/new + state/defaults |
-| 3 | F3, F7 | serializer/fix + graph/routing |
-| 4 | F4, F8 | serializer/fix + streaming |
+| 3 | F3, F7 | serializer/fix + streaming/emission |
+| 4 | F4, F8 | serializer/fix + streaming/dedup |
 
 ### Correlation Pairs
 
@@ -106,8 +107,8 @@ No hints about existing PRs, discussions, or solution approaches.
 |------|----------|------------------|
 | serializer_new_types | F1, F2 | Both extend _msgpack_default()/_msgpack_ext_hook() |
 | serializer_type_preservation | F3, F4 | Both fix EXT_CONSTRUCTOR mechanism |
-| state_management | F5, F6 | Both fix Pydantic/dataclass channel init |
-| graph_api | F7, F8 | Both modify graph compilation/execution |
+| state_management | F5, F6 | Both fix channel creation pipeline (state.py -> binop.py) |
+| streaming_messages | F7, F8 | Both fix _messages.py (emission + dedup) |
 
 ## 8. Measurement Framework
 
@@ -117,6 +118,7 @@ For each feature x treatment:
 - T1 score: `t1_passed / t1_total` (automated)
 - T2 score: `t2_passed / t2_total` (automated, edge cases)
 - T3 score: `t3_passed / t3_total` (quality assessment)
+- T4 score: `t4_passed / t4_total` (smoke/integration)
 - Composite: weighted combination (weights TBD in Phase 3)
 
 ### Communication Analysis
@@ -141,3 +143,4 @@ TBD — detailed in Phase 2.
 | 2026-02-20 | Initial design | Phase 0 scaffolding |
 | 2026-02-20 | Phase 1: pinned LangGraph, 88 acceptance tests, communication infrastructure | Baseline for treatments |
 | 2026-02-20 | Flag: F7 (END routing) all 11 tests pass on pinned commit | May need replacement feature |
+| 2026-02-20 | Replace F5-F8: harder features, add T4 smoke tier, 96 total tests (all fail) | F5-F8 too easy (9-11/11 passing) |

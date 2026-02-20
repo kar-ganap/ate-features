@@ -4,7 +4,7 @@
 
 Experimental comparison of Claude Code with Agent Teams vs single-agent for
 feature implementation on the LangGraph Python library. 8 treatments, 8 features,
-tiered acceptance tests (T1/T2/T3), spec-based prompts (no issue URLs).
+tiered acceptance tests (T1/T2/T3/T4), spec-based prompts (no issue URLs).
 
 Successor to [ate](https://github.com/kar-ganap/ate) which tested bug-fixing in
 Ruff and found a ceiling effect (8/8 solve rate regardless of treatment, zero
@@ -59,7 +59,7 @@ ate-features/
 │   └── cli.py                 # CLI with comms subcommand
 ├── tests/
 │   ├── unit/                  # Mocked tests (40 tests)
-│   └── acceptance/            # LangGraph acceptance tests (88 tests)
+│   └── acceptance/            # LangGraph acceptance tests (96 tests)
 ├── scripts/
 │   ├── pin_langgraph.sh       # Clone pinned LangGraph
 │   └── setup_langgraph.sh     # Editable install of LangGraph libs
@@ -75,11 +75,11 @@ ate-features/
 
 ## Current State
 
-**Phase 1 complete.** LangGraph pinned (b0f14649), 88 acceptance tests across
-8 features, communication infrastructure (transcript parser, pattern-quality
-nudges, CLI).
+**Phase 1 complete.** LangGraph pinned (b0f14649), 96 acceptance tests across
+8 features (all failing), communication infrastructure (transcript parser,
+pattern-quality nudges, CLI).
 
-40 unit tests + 88 acceptance tests = 128 total.
+40 unit tests + 96 acceptance tests = 136 total.
 
 ## Phases
 
@@ -91,18 +91,18 @@ nudges, CLI).
 
 ## Acceptance Test Results (against pinned LangGraph)
 
-| Feature | T1 | T2 | T3 | Fails | Notes |
-|---------|----|----|-----|-------|-------|
-| F1 Pandas serde | 3F | 5F | 3F | 11/11 | No pandas handler |
-| F2 Pydantic round-trip | 3F | 5F | 3F | 11/11 | No `.dumps` method |
-| F3 StrEnum preservation | 3F | 5F | 3F | 11/11 | StrEnum not preserved |
-| F4 Nested Enum | 3F | 5F | 3F | 11/11 | Enums in containers lost |
-| F5 Aliased fields | 3P | 4P+1F | 1P+1F | 2/11 | Strict alias + reducer |
-| F6 Dataclass defaults | 3P | 3P+2F | 1P+1F | 3/11 | Non-trivial defaults |
-| F7 END routing | 3P | 5P | 3P | **0/11** | **Already implemented** |
-| F8 messages_key | 2P+1F | 3P+2F | 3P | 3/11 | Key filtering missing |
+| Feature | T1 | T2 | T3 | T4 | Fails | Notes |
+|---------|----|----|-----|-----|-------|-------|
+| F1 Pandas serde | 3F | 5F | 3F | — | 11/11 | No pandas handler |
+| F2 Pydantic round-trip | 3F | 5F | 3F | — | 11/11 | No `.dumps` method |
+| F3 StrEnum preservation | 3F | 5F | 3F | — | 11/11 | StrEnum not preserved |
+| F4 Nested Enum | 3F | 5F | 3F | — | 11/11 | Enums in containers lost |
+| F5 Reducer metadata | 3F | 5F | 3F | 2F | 13/13 | `meta[-1]` only checks last |
+| F6 Default factory | 3F | 5F | 3F | 2F | 13/13 | `typ()` ignores factory |
+| F7 Nested emission | 3F | 5F | 3F | 2F | 13/13 | 2-level scan only |
+| F8 Nested dedup | 3F | 5F | 3F | 2F | 13/13 | Input msgs not tracked |
 
-**Warning**: F7 all tests pass — feature already implemented. Consider replacing.
+All 96 tests fail against pinned commit. 0 passing.
 
 ## Communication Infrastructure
 
@@ -115,8 +115,9 @@ nudges, CLI).
 
 - pyproject.toml: `dependencies` must come before `[project.scripts]` in the
   `[project]` table, otherwise hatchling fails
-- `from __future__ import annotations` + `get_type_hints()`: TypedDicts with
-  `Annotated` fields defined in local scope fail because `Annotated` must be in
-  module-level globals
+- `from __future__ import annotations` + `get_type_hints()`: TypedDicts/dataclasses
+  with `Annotated` fields defined in local scope fail because names must be in
+  module-level globals. Acceptance tests MUST NOT use `from __future__ import
+  annotations` — all annotation features work natively in Python 3.11
 - `data/langgraph/.gitkeep` must be removed before `git clone` into the directory
 - `make test-acceptance` requires `make setup-langgraph` first

@@ -17,7 +17,7 @@ class TestLoadFeatures:
     def test_subsystems(self) -> None:
         portfolio = load_features()
         subsystems = {f.subsystem for f in portfolio.features}
-        assert subsystems == {"serializer", "state", "graph", "streaming"}
+        assert subsystems == {"serializer", "state", "streaming"}
 
 
 class TestLoadTreatments:
