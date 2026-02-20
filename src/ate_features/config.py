@@ -103,6 +103,20 @@ def load_specialization(
     return spec_path.read_text()
 
 
+def load_scoring_config(
+    config_dir: Path = DEFAULT_CONFIG_DIR,
+) -> dict[str, object]:
+    """Load scoring configuration (weights, thresholds) from YAML."""
+    scoring_path = config_dir / "scoring.yaml"
+    if not scoring_path.exists():
+        msg = f"scoring.yaml not found at {scoring_path}"
+        raise FileNotFoundError(msg)
+
+    with open(scoring_path) as f:
+        result: dict[str, object] = yaml.safe_load(f)
+    return result
+
+
 def load_communication_nudges(
     config_dir: Path = DEFAULT_CONFIG_DIR,
 ) -> dict[str, dict[str, str]]:
