@@ -174,7 +174,40 @@ Enhanced from predecessor experiment:
 
 ## 9. Execution Protocol
 
-TBD — detailed in Phase 2.
+### Harness
+
+The execution harness (`src/ate_features/harness.py`) automates session setup:
+
+1. **Scaffold**: `ate-features exec scaffold <treatment_id>` creates session
+   directories with `session_guide.md`, `metadata.json`, and `notes.md`.
+   Per-feature treatments (0b, 6) create 8 sub-directories.
+2. **Prompt**: `get_opening_prompt()` generates detailed or vague prompts based
+   on the treatment's `prompt_specificity` dimension. Specialized treatments
+   receive domain context preambles; encourage/discourage treatments get
+   communication nudges.
+3. **Patch**: After implementation, extract patches per feature. `apply_patch()`
+   validates with `--check` before applying. `revert_langgraph()` resets to
+   pinned state between treatments.
+4. **Status**: `ate-features exec status` shows the 11×8 completion matrix.
+
+### Specialization Files
+
+4 domain context files in `config/specializations/`, named by content:
+- `serde_types_and_state_channels.md` (Agent 1: F1, F5)
+- `serde_pydantic_and_state_reducers.md` (Agent 2: F2, F6)
+- `serde_enums_and_stream_emission.md` (Agent 3: F3, F7)
+- `serde_nested_and_stream_dedup.md` (Agent 4: F4, F8)
+
+### Session Workflow
+
+1. Scaffold the treatment session
+2. Review the session guide
+3. Start Claude Code in the pinned LangGraph directory
+4. Paste the opening prompt (from the guide)
+5. Let the agent(s) work; record the session transcript
+6. Extract patches, run acceptance tests, record scores
+7. Update metadata.json with timestamps and notes
+8. Revert LangGraph to clean state before next treatment
 
 ### Wave Structure
 
@@ -192,3 +225,4 @@ TBD — detailed in Phase 2.
 | 2026-02-20 | Flag: F7 (END routing) all 11 tests pass on pinned commit | May need replacement feature |
 | 2026-02-20 | Replace F5-F8: harder features, add T4 smoke tier, 96 total tests (all fail) | F5-F8 too easy (9-11/11 passing) |
 | 2026-02-20 | Add specialization dimension + 3 treatments (6, 7, 8), 2-wave execution | Test whether spawn-prompt domain context improves outcomes |
+| 2026-02-20 | Phase 2: execution harness, specialization files, CLI exec commands | Scaffold/prompt/patch/status infrastructure for running treatments |

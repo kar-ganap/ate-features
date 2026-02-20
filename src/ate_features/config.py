@@ -78,6 +78,31 @@ def load_treatments(config_dir: Path = DEFAULT_CONFIG_DIR) -> TreatmentConfig:
     )
 
 
+_SPECIALIZATION_FILES: dict[int, str] = {
+    1: "serde_types_and_state_channels.md",
+    2: "serde_pydantic_and_state_reducers.md",
+    3: "serde_enums_and_stream_emission.md",
+    4: "serde_nested_and_stream_dedup.md",
+}
+
+
+def load_specialization(
+    agent_num: int, config_dir: Path = DEFAULT_CONFIG_DIR
+) -> str:
+    """Load specialization context for an agent role (1-4)."""
+    if agent_num not in _SPECIALIZATION_FILES:
+        msg = f"agent_num must be 1-4, got {agent_num}"
+        raise ValueError(msg)
+
+    filename = _SPECIALIZATION_FILES[agent_num]
+    spec_path = config_dir / "specializations" / filename
+    if not spec_path.exists():
+        msg = f"Specialization file not found at {spec_path}"
+        raise FileNotFoundError(msg)
+
+    return spec_path.read_text()
+
+
 def load_communication_nudges(
     config_dir: Path = DEFAULT_CONFIG_DIR,
 ) -> dict[str, dict[str, str]]:

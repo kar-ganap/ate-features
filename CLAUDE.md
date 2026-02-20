@@ -41,6 +41,7 @@ ate-features/
 ├── config/
 │   ├── features.yaml          # 8 LangGraph features with specs
 │   ├── treatments.yaml        # 11 treatments (8 core + 3 specialized)
+│   ├── specializations/        # 4 agent domain context files
 │   └── prompts/
 │       └── communication_nudges.yaml  # Pattern-quality nudges
 ├── docs/
@@ -55,12 +56,13 @@ ate-features/
 │   ├── scores/                # Tiered scores
 │   └── acceptance-tests/      # T1/T2/T3 test suites per feature
 ├── src/ate_features/
-│   ├── models.py              # Pydantic models
-│   ├── config.py              # YAML loading + communication nudges
+│   ├── models.py              # Pydantic models (incl. RunMetadata)
+│   ├── config.py              # YAML loading + specialization loader
+│   ├── harness.py             # Execution harness (scaffold, prompts, patches)
 │   ├── communication.py       # Transcript parsing + communication models
-│   └── cli.py                 # CLI with comms subcommand
+│   └── cli.py                 # CLI with comms + exec subcommands
 ├── tests/
-│   ├── unit/                  # Mocked tests (40 tests)
+│   ├── unit/                  # Unit tests (117 tests)
 │   └── acceptance/            # LangGraph acceptance tests (96 tests)
 ├── scripts/
 │   ├── pin_langgraph.sh       # Clone pinned LangGraph
@@ -77,11 +79,11 @@ ate-features/
 
 ## Current State
 
-**Phase 1 complete.** LangGraph pinned (b0f14649), 96 acceptance tests across
-8 features (all failing), communication infrastructure (transcript parser,
-pattern-quality nudges, CLI).
+**Phase 2 complete.** Execution harness: scaffolding, prompt generation
+(detailed/vague × specialization × communication nudge), session guides,
+patch management (apply/revert), CLI exec commands.
 
-40 unit tests + 96 acceptance tests = 136 total.
+117 unit tests + 96 acceptance tests = 213 total.
 
 ## Phases
 
@@ -89,7 +91,7 @@ pattern-quality nudges, CLI).
 |-------|--------|--------|
 | 0 | `phase-0-scaffold` | Complete |
 | 1 | `phase-1-langgraph-tests` | Complete |
-| 2 | TBD | Pending — execution infrastructure, treatment runner |
+| 2 | `phase-2-execution-harness` | Complete |
 
 ## Acceptance Test Results (against pinned LangGraph)
 
@@ -112,6 +114,15 @@ All 96 tests fail against pinned commit. 0 passing.
 - `config/prompts/communication_nudges.yaml` — pattern-quality nudges
 - CLI: `ate-features comms parse <session-id>`, `ate-features comms summary <session-id> <treatment-id>`
 - Nudge dimension stays `encourage|discourage|neutral` but text enriched with examples
+
+## Execution Harness
+
+- `src/ate_features/harness.py` — directory mgmt, prompts, scaffolding, patches
+- `config/specializations/serde_*.md` — 4 domain context files named by content
+- CLI: `ate-features exec scaffold <treatment_id>`, `ate-features exec status`
+- Specialization files mapped by agent number: `load_specialization(1-4)`
+- Per-feature treatments (0b, 6): 8×1 without Agent Teams → 8 sub-directories
+- `apply_patch()` does `--check` before `apply`; `revert_langgraph()` does `checkout . && clean -fd`
 
 ## Known Gotchas
 

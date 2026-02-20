@@ -6,7 +6,9 @@ import typer
 
 app = typer.Typer(help="Agent Teams Eval: feature implementation in LangGraph")
 comms_app = typer.Typer(help="Communication analysis")
+exec_app = typer.Typer(help="Execution management")
 app.add_typer(comms_app, name="comms")
+app.add_typer(exec_app, name="exec")
 
 
 @app.command()
@@ -72,3 +74,46 @@ def comms_summary(session_id: str, treatment_id: str) -> None:
         typer.echo("Taxonomy breakdown:")
         for tax, count in sorted(summary.events_by_taxonomy.items()):
             typer.echo(f"  {tax}: {count}")
+
+
+@exec_app.command("scaffold")
+def exec_scaffold(
+    treatment_id: str,
+) -> None:
+    """Scaffold session directories for a treatment."""
+    from ate_features.harness import scaffold_treatment
+
+    # Parse treatment_id: try int first, fall back to string
+    tid: int | str
+    try:
+        tid = int(treatment_id)
+    except ValueError:
+        tid = treatment_id
+
+    paths = scaffold_treatment(tid)
+    typer.echo(f"Scaffolded {len(paths)} files:")
+    for p in paths:
+        typer.echo(f"  {p}")
+
+
+@exec_app.command("status")
+def exec_status() -> None:
+    """Show 11x8 completion matrix for all treatments."""
+    from ate_features.config import load_features, load_treatments
+    from ate_features.harness import get_patch_path
+
+    features = load_features().features
+    treatments = load_treatments().treatments
+
+    # Header
+    feat_ids = [f.id for f in features]
+    header = f"{'Treatment':<20}" + "".join(f"{fid:>6}" for fid in feat_ids)
+    typer.echo(header)
+    typer.echo("-" * len(header))
+
+    for t in treatments:
+        row = f"{t.id!s:<20}"
+        for f in features:
+            patch = get_patch_path(t.id, f.id)
+            row += f"{'  ✓' if patch.exists() else '  ·':>6}"
+        typer.echo(row)
