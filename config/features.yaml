@@ -1,0 +1,122 @@
+langgraph_pin: "b0f14649e0669a6399cb790d23672591a2a52884"
+langgraph_pin_date: "2026-02-20"
+
+features:
+  - id: "F1"
+    title: "Pandas DataFrame/Series msgpack serialization"
+    subsystem: serializer
+    spec: |
+      Add first-class pandas DataFrame and Series serialization to
+      JsonPlusSerializer in libs/checkpoint/. Currently these types
+      only work with pickle_fallback=True. Implement custom msgpack
+      ext type handlers in _msgpack_default() and _msgpack_ext_hook()
+      that serialize/deserialize DataFrame and Series without relying
+      on pickle. Must preserve dtypes, index, column names, and
+      multi-index structures.
+
+  - id: "F2"
+    title: "Generic Pydantic v2 type round-trip in checkpoint serde"
+    subsystem: serializer
+    spec: |
+      Extend JsonPlusSerializer to support round-tripping arbitrary
+      Pydantic v2 BaseModel subclasses through checkpoint
+      serialization/deserialization. Currently only specific known
+      types are handled. The serializer should detect BaseModel
+      instances, serialize them via model_dump(mode="json"), and
+      reconstruct them using model_validate() on deserialization,
+      preserving the original type information.
+
+  - id: "F3"
+    title: "StrEnum preservation in checkpoint serde"
+    subsystem: serializer
+    spec: |
+      Fix JsonPlusSerializer so that Python StrEnum values survive
+      a serialize/deserialize round-trip. Currently StrEnum values
+      are downcast to plain strings during serialization. The fix
+      should preserve the enum type through the EXT_CONSTRUCTOR
+      mechanism so that isinstance() checks and .name/.value
+      attributes work correctly after deserialization.
+
+  - id: "F4"
+    title: "Nested Enum deserialization fix"
+    subsystem: serializer
+    spec: |
+      Fix deserialization of Enum values that are nested inside
+      containers (lists, dicts, dataclass fields) in
+      JsonPlusSerializer. Currently top-level Enum values round-trip
+      correctly, but when an Enum is a field inside a dataclass or
+      nested in a dict/list, it deserializes as a plain string/int.
+      The fix should recursively apply enum reconstruction through
+      the EXT_CONSTRUCTOR mechanism.
+
+  - id: "F5"
+    title: "Pydantic state with aliased fields"
+    subsystem: state
+    spec: |
+      Fix LangGraph state channel initialization so that Pydantic
+      models with Field(alias=...) work correctly as graph state.
+      Currently, aliased fields cause KeyError during channel setup
+      because the channel system uses Python attribute names while
+      Pydantic expects alias names for construction. The fix should
+      handle the alias/field-name mapping at the channel boundary.
+
+  - id: "F6"
+    title: "Dataclass defaults with reducer"
+    subsystem: state
+    spec: |
+      Fix LangGraph state channel initialization for dataclass
+      fields that have both a default value and a reducer (Annotated
+      with operator.add or similar). Currently, if a dataclass field
+      has a default_factory or default value AND a reducer annotation,
+      the default is silently dropped during channel construction.
+      The fix should preserve defaults while still applying the
+      reducer for updates.
+
+  - id: "F7"
+    title: "END routing in conditional edges"
+    subsystem: graph
+    spec: |
+      Fix routing to END from conditional_entry_point and
+      add_conditional_edges when the routing function returns END
+      as one of several possible destinations. Currently, returning
+      END from a conditional edge that also has non-END targets
+      causes a validation error during graph compilation. The fix
+      should allow END as a valid routing target in mixed conditional
+      edges.
+
+  - id: "F8"
+    title: "messages_key streaming filter"
+    subsystem: streaming
+    spec: |
+      Fix the streaming output so that when a graph is configured
+      with a custom messages_key (not the default "messages"), the
+      stream events correctly filter and emit only the messages from
+      the configured key. Currently, custom messages_key values are
+      ignored during streaming, causing either no message events or
+      events from the wrong state key.
+
+feature_assignments:
+  explicit:
+    agent_1: ["F1", "F5"]
+    agent_2: ["F2", "F6"]
+    agent_3: ["F3", "F7"]
+    agent_4: ["F4", "F8"]
+  autonomous: null
+
+correlation_pairs:
+  - name: "serializer_new_types"
+    feature_a: "F1"
+    feature_b: "F2"
+    shared: "Both extend _msgpack_default()/_msgpack_ext_hook() in jsonplus.py"
+  - name: "serializer_type_preservation"
+    feature_a: "F3"
+    feature_b: "F4"
+    shared: "Both fix EXT_CONSTRUCTOR mechanism in jsonplus.py"
+  - name: "state_management"
+    feature_a: "F5"
+    feature_b: "F6"
+    shared: "Both fix Pydantic/dataclass interaction in channel init"
+  - name: "graph_api"
+    feature_a: "F7"
+    feature_b: "F8"
+    shared: "Both modify graph compilation/execution behavior"

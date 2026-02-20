@@ -1,0 +1,122 @@
+treatments:
+  - id: "0a"
+    label: "Control: Full Context"
+    dimensions:
+      decomposition: explicit
+      prompt_specificity: detailed
+      delegate_mode: null  # N/A — no Agent Teams
+      team_size: "1x8"
+      communication: null  # N/A — no Agent Teams
+    execution:
+      mode: interactive
+      soft_budget: "~25 tool calls per feature"
+
+  - id: "0b"
+    label: "Control: Swim Lanes"
+    dimensions:
+      decomposition: explicit
+      prompt_specificity: detailed
+      delegate_mode: null  # N/A — no Agent Teams
+      team_size: "8x1"
+      communication: null  # N/A — no Agent Teams
+    execution:
+      mode: interactive
+      soft_budget: "~25 tool calls per feature"
+
+  - id: 1
+    label: "Structured Team"
+    dimensions:
+      decomposition: explicit
+      prompt_specificity: detailed
+      delegate_mode: true
+      team_size: "4x2"
+      communication: neutral
+    execution:
+      mode: interactive
+      soft_budget: "~25 tool calls per feature"
+
+  - id: 2a
+    label: "Autonomous + Encourage"
+    dimensions:
+      decomposition: autonomous
+      prompt_specificity: vague
+      delegate_mode: true
+      team_size: "4x2"
+      communication: encourage
+    execution:
+      mode: interactive
+      soft_budget: "~25 tool calls per feature"
+
+  - id: 2b
+    label: "Autonomous + Discourage"
+    dimensions:
+      decomposition: autonomous
+      prompt_specificity: vague
+      delegate_mode: true
+      team_size: "4x2"
+      communication: discourage
+    execution:
+      mode: interactive
+      soft_budget: "~25 tool calls per feature"
+
+  - id: 3
+    label: "Invest in Prompts"
+    dimensions:
+      decomposition: autonomous
+      prompt_specificity: detailed
+      delegate_mode: true
+      team_size: "4x2"
+      communication: neutral
+    execution:
+      mode: interactive
+      soft_budget: "~25 tool calls per feature"
+
+  - id: 4
+    label: "Player-Coach"
+    dimensions:
+      decomposition: autonomous
+      prompt_specificity: vague
+      delegate_mode: false
+      team_size: "4x2"
+      communication: neutral
+    execution:
+      mode: interactive
+      soft_budget: "~25 tool calls per feature"
+
+  - id: 5
+    label: "Max Parallelism"
+    dimensions:
+      decomposition: explicit
+      prompt_specificity: detailed
+      delegate_mode: true
+      team_size: "8x1"
+      communication: neutral
+    execution:
+      mode: interactive
+      soft_budget: "~25 tool calls per feature"
+
+feature_assignments:
+  explicit:
+    agent_1: ["F1", "F5"]
+    agent_2: ["F2", "F6"]
+    agent_3: ["F3", "F7"]
+    agent_4: ["F4", "F8"]
+  autonomous: null  # Lead decides; document what it chooses
+
+correlation_pairs:
+  - name: "serializer_new_types"
+    feature_a: "F1"
+    feature_b: "F2"
+    shared: "Both extend _msgpack_default()/_msgpack_ext_hook() in jsonplus.py"
+  - name: "serializer_type_preservation"
+    feature_a: "F3"
+    feature_b: "F4"
+    shared: "Both fix EXT_CONSTRUCTOR mechanism in jsonplus.py"
+  - name: "state_management"
+    feature_a: "F5"
+    feature_b: "F6"
+    shared: "Both fix Pydantic/dataclass interaction in channel init"
+  - name: "graph_api"
+    feature_a: "F7"
+    feature_b: "F8"
+    shared: "Both modify graph compilation/execution behavior"
