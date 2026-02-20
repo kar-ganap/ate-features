@@ -7,6 +7,7 @@ treatments:
       delegate_mode: null  # N/A — no Agent Teams
       team_size: "1x8"
       communication: null  # N/A — no Agent Teams
+      specialization: vanilla
     execution:
       mode: interactive
       soft_budget: "~25 tool calls per feature"
@@ -19,6 +20,7 @@ treatments:
       delegate_mode: null  # N/A — no Agent Teams
       team_size: "8x1"
       communication: null  # N/A — no Agent Teams
+      specialization: vanilla
     execution:
       mode: interactive
       soft_budget: "~25 tool calls per feature"
@@ -31,6 +33,7 @@ treatments:
       delegate_mode: true
       team_size: "4x2"
       communication: neutral
+      specialization: vanilla
     execution:
       mode: interactive
       soft_budget: "~25 tool calls per feature"
@@ -43,6 +46,7 @@ treatments:
       delegate_mode: true
       team_size: "4x2"
       communication: encourage
+      specialization: vanilla
     execution:
       mode: interactive
       soft_budget: "~25 tool calls per feature"
@@ -55,6 +59,7 @@ treatments:
       delegate_mode: true
       team_size: "4x2"
       communication: discourage
+      specialization: vanilla
     execution:
       mode: interactive
       soft_budget: "~25 tool calls per feature"
@@ -67,6 +72,7 @@ treatments:
       delegate_mode: true
       team_size: "4x2"
       communication: neutral
+      specialization: vanilla
     execution:
       mode: interactive
       soft_budget: "~25 tool calls per feature"
@@ -79,6 +85,7 @@ treatments:
       delegate_mode: false
       team_size: "4x2"
       communication: neutral
+      specialization: vanilla
     execution:
       mode: interactive
       soft_budget: "~25 tool calls per feature"
@@ -91,6 +98,51 @@ treatments:
       delegate_mode: true
       team_size: "8x1"
       communication: neutral
+      specialization: vanilla
+    execution:
+      mode: interactive
+      soft_budget: "~25 tool calls per feature"
+
+  # --- Specialized variants (Wave 2) ---
+
+  - id: 6
+    label: "Specialized Swim Lanes"
+    paired_with: "0b"
+    dimensions:
+      decomposition: explicit
+      prompt_specificity: detailed
+      delegate_mode: null  # N/A — no Agent Teams
+      team_size: "8x1"
+      communication: null  # N/A — no Agent Teams
+      specialization: specialized
+    execution:
+      mode: interactive
+      soft_budget: "~25 tool calls per feature"
+
+  - id: 7
+    label: "Specialized Structured Team"
+    paired_with: 1
+    dimensions:
+      decomposition: explicit
+      prompt_specificity: detailed
+      delegate_mode: true
+      team_size: "4x2"
+      communication: neutral
+      specialization: specialized
+    execution:
+      mode: interactive
+      soft_budget: "~25 tool calls per feature"
+
+  - id: 8
+    label: "Specialized + Encourage"
+    paired_with: "2a"
+    dimensions:
+      decomposition: autonomous
+      prompt_specificity: vague
+      delegate_mode: true
+      team_size: "4x2"
+      communication: encourage
+      specialization: specialized
     execution:
       mode: interactive
       soft_budget: "~25 tool calls per feature"
@@ -115,8 +167,8 @@ correlation_pairs:
   - name: "state_management"
     feature_a: "F5"
     feature_b: "F6"
-    shared: "Both fix Pydantic/dataclass interaction in channel init"
-  - name: "graph_api"
+    shared: "Both fix channel creation pipeline (state.py -> binop.py)"
+  - name: "streaming_messages"
     feature_a: "F7"
     feature_b: "F8"
-    shared: "Both modify graph compilation/execution behavior"
+    shared: "Both fix _messages.py (emission + dedup)"

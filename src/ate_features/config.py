@@ -56,6 +56,7 @@ def load_treatments(config_dir: Path = DEFAULT_CONFIG_DIR) -> TreatmentConfig:
             Treatment(
                 id=t["id"],
                 label=t["label"],
+                paired_with=t.get("paired_with"),
                 dimensions=TreatmentDimensions(**t["dimensions"]),
                 execution=ExecutionConfig(**t["execution"]),
             )

@@ -3,8 +3,10 @@
 ## Overview
 
 Experimental comparison of Claude Code with Agent Teams vs single-agent for
-feature implementation on the LangGraph Python library. 8 treatments, 8 features,
-tiered acceptance tests (T1/T2/T3/T4), spec-based prompts (no issue URLs).
+feature implementation on the LangGraph Python library. 11 treatments (8 core +
+3 specialized variants), 8 features, tiered acceptance tests (T1/T2/T3/T4),
+spec-based prompts (no issue URLs). Two-wave execution: Wave 1 (core), Wave 2
+(specialized, contingent on Wave 1 variance).
 
 Successor to [ate](https://github.com/kar-ganap/ate) which tested bug-fixing in
 Ruff and found a ceiling effect (8/8 solve rate regardless of treatment, zero
@@ -38,7 +40,7 @@ ate-features/
 ├── pyproject.toml             # uv + hatchling + ruff + mypy + pytest
 ├── config/
 │   ├── features.yaml          # 8 LangGraph features with specs
-│   ├── treatments.yaml        # 8 treatments (same matrix as ate)
+│   ├── treatments.yaml        # 11 treatments (8 core + 3 specialized)
 │   └── prompts/
 │       └── communication_nudges.yaml  # Pattern-quality nudges
 ├── docs/
