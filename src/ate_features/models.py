@@ -44,6 +44,11 @@ class CommunicationMode(StrEnum):
     DISCOURAGE = "discourage"
 
 
+class Specialization(StrEnum):
+    VANILLA = "vanilla"
+    SPECIALIZED = "specialized"
+
+
 class ExecutionMode(StrEnum):
     INTERACTIVE = "interactive"
 
@@ -85,6 +90,7 @@ class TreatmentDimensions(BaseModel):
     delegate_mode: bool | None = None
     team_size: TeamSize
     communication: CommunicationMode | None = None
+    specialization: Specialization = Specialization.VANILLA
 
 
 class ExecutionConfig(BaseModel):
@@ -99,6 +105,7 @@ class Treatment(BaseModel):
 
     id: int | str
     label: str
+    paired_with: int | str | None = None
     dimensions: TreatmentDimensions
     execution: ExecutionConfig
 

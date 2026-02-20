@@ -17,18 +17,24 @@ class TestLoadFeatures:
     def test_subsystems(self) -> None:
         portfolio = load_features()
         subsystems = {f.subsystem for f in portfolio.features}
-        assert subsystems == {"serializer", "state", "graph", "streaming"}
+        assert subsystems == {"serializer", "state", "streaming"}
 
 
 class TestLoadTreatments:
     def test_loads_all_treatments(self) -> None:
         config = load_treatments()
-        assert len(config.treatments) == 8
+        assert len(config.treatments) == 11
 
     def test_treatment_ids(self) -> None:
         config = load_treatments()
         ids = [t.id for t in config.treatments]
-        assert ids == ["0a", "0b", 1, "2a", "2b", 3, 4, 5]
+        assert ids == ["0a", "0b", 1, "2a", "2b", 3, 4, 5, 6, 7, 8]
+
+    def test_specialized_treatments_have_pairs(self) -> None:
+        config = load_treatments()
+        specialized = [t for t in config.treatments if t.dimensions.specialization == "specialized"]
+        assert len(specialized) == 3
+        assert all(t.paired_with is not None for t in specialized)
 
     def test_correlation_pairs(self) -> None:
         config = load_treatments()

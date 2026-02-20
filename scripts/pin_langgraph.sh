@@ -18,6 +18,8 @@ if [ -d "$FULL_TARGET/.git" ]; then
     git -C "$FULL_TARGET" checkout "$LANGGRAPH_PIN"
 else
     echo "Cloning LangGraph..."
+    # Remove .gitkeep if it exists (prevents clone into non-empty dir)
+    rm -f "$FULL_TARGET/.gitkeep"
     git clone "$LANGGRAPH_REPO" "$FULL_TARGET"
     echo "Checking out pinned commit..."
     git -C "$FULL_TARGET" checkout "$LANGGRAPH_PIN"

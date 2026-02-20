@@ -17,6 +17,8 @@ subsystems) improve solution quality beyond what parallel independent work achie
   when features share subsystems?
 - **Collaboration**: Does inter-agent communication about shared code paths lead to
   better solutions than independent parallel work?
+- **Specialization**: Does giving agents subsystem domain context (via spawn prompt
+  enrichment) improve outcomes — and does it interact with team collaboration?
 
 ### Prior Work
 
@@ -48,10 +50,10 @@ See `../ate/docs/findings.md` for the full writeup.
 | F2 | Generic Pydantic v2 type round-trip in checkpoint serde | serializer |
 | F3 | StrEnum preservation in checkpoint serde | serializer |
 | F4 | Nested Enum deserialization fix | serializer |
-| F5 | Pydantic state with aliased fields | state |
-| F6 | Dataclass defaults with reducer | state |
-| F7 | END routing in conditional edges | graph |
-| F8 | messages_key streaming filter | streaming |
+| F5 | Reducer metadata ordering dependency | state |
+| F6 | BinaryOperatorAggregate ignores default_factory | state |
+| F7 | Nested message detection in stream_mode=messages | streaming |
+| F8 | Input message dedup for nested structures | streaming |
 
 ## 4. Acceptance Test Design
 
@@ -61,9 +63,10 @@ Tiered methodology creating a quality gradient:
 - **T2 (Edge Cases)**: Does it handle boundary conditions? First approach may fail.
 - **T3 (Quality)**: Is it robust, performant, and maintainer-acceptable? First
   approach probably fails.
+- **T4 (Smoke/Integration)**: End-to-end realistic multi-node workflows with
+  checkpointer. Tests behavioral correctness in production-like scenarios.
 
-Acceptance test suites written in Phase 1. Existing PR solutions (if any) should
-fail T2/T3.
+Acceptance test suites written in Phase 1. All tests FAIL against pinned commit.
 
 ## 5. Prompt Design
 
@@ -76,18 +79,56 @@ No hints about existing PRs, discussions, or solution approaches.
 
 ## 6. Treatment Matrix
 
-8 treatments. See `config/treatments.yaml` for full definitions.
+11 treatments across 7 dimensions. See `config/treatments.yaml` for full definitions.
 
-| ID | Label | Decomposition | Prompt | Delegate | Team Size | Communication |
-|----|-------|---------------|--------|----------|-----------|---------------|
-| 0a | Control: Full Context | explicit | detailed | N/A | 1x8 | N/A |
-| 0b | Control: Swim Lanes | explicit | detailed | N/A | 8x1 | N/A |
-| 1 | Structured Team | explicit | detailed | on | 4x2 | neutral |
-| 2a | Autonomous + Encourage | autonomous | vague | on | 4x2 | encourage |
-| 2b | Autonomous + Discourage | autonomous | vague | on | 4x2 | discourage |
-| 3 | Invest in Prompts | autonomous | detailed | on | 4x2 | neutral |
-| 4 | Player-Coach | autonomous | vague | off | 4x2 | neutral |
-| 5 | Max Parallelism | explicit | detailed | on | 8x1 | neutral |
+### Wave 1: Core Treatments (8)
+
+| ID | Label | Decomposition | Prompt | Delegate | Team Size | Communication | Specialization |
+|----|-------|---------------|--------|----------|-----------|---------------|----------------|
+| 0a | Control: Full Context | explicit | detailed | N/A | 1x8 | N/A | vanilla |
+| 0b | Control: Swim Lanes | explicit | detailed | N/A | 8x1 | N/A | vanilla |
+| 1 | Structured Team | explicit | detailed | on | 4x2 | neutral | vanilla |
+| 2a | Autonomous + Encourage | autonomous | vague | on | 4x2 | encourage | vanilla |
+| 2b | Autonomous + Discourage | autonomous | vague | on | 4x2 | discourage | vanilla |
+| 3 | Invest in Prompts | autonomous | detailed | on | 4x2 | neutral | vanilla |
+| 4 | Player-Coach | autonomous | vague | off | 4x2 | neutral | vanilla |
+| 5 | Max Parallelism | explicit | detailed | on | 8x1 | neutral | vanilla |
+
+### Wave 2: Specialized Variants (3)
+
+Run after Wave 1, contingent on Wave 1 producing score variance across treatments.
+
+| ID | Label | Paired With | Decomposition | Prompt | Delegate | Team Size | Communication | Specialization |
+|----|-------|-------------|---------------|--------|----------|-----------|---------------|----------------|
+| 6 | Specialized Swim Lanes | 0b | explicit | detailed | N/A | 8x1 | N/A | specialized |
+| 7 | Specialized Structured Team | 1 | explicit | detailed | on | 4x2 | neutral | specialized |
+| 8 | Specialized + Encourage | 2a | autonomous | vague | on | 4x2 | encourage | specialized |
+
+### Specialization Dimension
+
+Specialized treatments enrich each agent's spawn prompt with subsystem domain
+context: key files, architecture descriptions, and cross-subsystem boundaries.
+This is delivered via Agent Teams spawn prompts (the only per-agent customization
+mechanism currently supported).
+
+Specialization content includes subsystem architecture and key entry points but
+explicitly excludes feature-specific hints, solution approaches, or knowledge of
+other agents' features.
+
+Specialization definitions are authored in Phase 2 as part of execution
+infrastructure. See `config/specializations/` (Phase 2).
+
+### Paired Comparisons
+
+| Pair | Treatments | Tests |
+|------|-----------|-------|
+| 0b vs 6 | Solo vanilla vs solo specialized | Does domain context help individual agents? |
+| 1 vs 7 | Team vanilla vs team specialized | Does domain context enable team collaboration? |
+| 2a vs 8 | Encourage vanilla vs encourage specialized | Can domain context compensate for vague prompts? |
+
+Each pair yields 8 paired observations (one per feature). Across 3 pairs: 24
+paired observations, sufficient for Wilcoxon signed-rank test on specialization
+effect.
 
 ## 7. Feature Assignments + Correlation Pairs
 
@@ -95,10 +136,10 @@ No hints about existing PRs, discussions, or solution approaches.
 
 | Agent | Features | Rationale |
 |-------|----------|-----------|
-| 1 | F1, F5 | serializer/new + state/pydantic |
+| 1 | F1, F5 | serializer/new + state/metadata |
 | 2 | F2, F6 | serializer/new + state/defaults |
-| 3 | F3, F7 | serializer/fix + graph/routing |
-| 4 | F4, F8 | serializer/fix + streaming |
+| 3 | F3, F7 | serializer/fix + streaming/emission |
+| 4 | F4, F8 | serializer/fix + streaming/dedup |
 
 ### Correlation Pairs
 
@@ -106,8 +147,8 @@ No hints about existing PRs, discussions, or solution approaches.
 |------|----------|------------------|
 | serializer_new_types | F1, F2 | Both extend _msgpack_default()/_msgpack_ext_hook() |
 | serializer_type_preservation | F3, F4 | Both fix EXT_CONSTRUCTOR mechanism |
-| state_management | F5, F6 | Both fix Pydantic/dataclass channel init |
-| graph_api | F7, F8 | Both modify graph compilation/execution |
+| state_management | F5, F6 | Both fix channel creation pipeline (state.py -> binop.py) |
+| streaming_messages | F7, F8 | Both fix _messages.py (emission + dedup) |
 
 ## 8. Measurement Framework
 
@@ -117,20 +158,37 @@ For each feature x treatment:
 - T1 score: `t1_passed / t1_total` (automated)
 - T2 score: `t2_passed / t2_total` (automated, edge cases)
 - T3 score: `t3_passed / t3_total` (quality assessment)
+- T4 score: `t4_passed / t4_total` (smoke/integration)
 - Composite: weighted combination (weights TBD in Phase 3)
 
 ### Communication Analysis
 
-Same methodology as predecessor experiment:
+Enhanced from predecessor experiment:
 - Only `SendMessage(recipient=<peer>)` with routing metadata counts
-- Transcript JSONL analysis for inter-agent communication frequency and content
+- Structured transcript parser (`src/ate_features/communication.py`) extracts
+  sender, recipient, content, and auto-classifies taxonomy
+- Pattern-quality nudges (`config/prompts/communication_nudges.yaml`) enrich
+  the encourage/discourage dimension with concrete examples of useful vs
+  wasteful communication
+- CLI support: `ate-features comms parse <session-id>`
 
 ## 9. Execution Protocol
 
 TBD — detailed in Phase 2.
+
+### Wave Structure
+
+- **Wave 1**: Run treatments 0a–5 (8 core treatments). Decision gate: do scores
+  vary enough across treatments to justify Wave 2?
+- **Wave 2**: Run treatments 6–8 (3 specialized variants). Only if Wave 1 shows
+  meaningful variance.
 
 ## 10. Change Log
 
 | Date | Change | Rationale |
 |------|--------|-----------|
 | 2026-02-20 | Initial design | Phase 0 scaffolding |
+| 2026-02-20 | Phase 1: pinned LangGraph, 88 acceptance tests, communication infrastructure | Baseline for treatments |
+| 2026-02-20 | Flag: F7 (END routing) all 11 tests pass on pinned commit | May need replacement feature |
+| 2026-02-20 | Replace F5-F8: harder features, add T4 smoke tier, 96 total tests (all fail) | F5-F8 too easy (9-11/11 passing) |
+| 2026-02-20 | Add specialization dimension + 3 treatments (6, 7, 8), 2-wave execution | Test whether spawn-prompt domain context improves outcomes |

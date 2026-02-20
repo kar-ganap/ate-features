@@ -50,50 +50,54 @@ features:
       the EXT_CONSTRUCTOR mechanism.
 
   - id: "F5"
-    title: "Pydantic state with aliased fields"
+    title: "Reducer metadata ordering dependency"
     subsystem: state
     spec: |
-      Fix LangGraph state channel initialization so that Pydantic
-      models with Field(alias=...) work correctly as graph state.
-      Currently, aliased fields cause KeyError during channel setup
-      because the channel system uses Python attribute names while
-      Pydantic expects alias names for construction. The fix should
-      handle the alias/field-name mapping at the channel boundary.
+      Fix _is_field_binop() in graph/state.py so that Annotated type
+      reducers work regardless of metadata ordering. Currently the
+      function only checks meta[-1] for a callable reducer. When the
+      reducer is not the last Annotated metadata item (e.g.,
+      Annotated[list, operator.add, "description"]), it is silently
+      dropped and the field becomes LastValue instead of
+      BinaryOperatorAggregate. The fix should scan ALL metadata items
+      for a callable with a 2-parameter signature.
 
   - id: "F6"
-    title: "Dataclass defaults with reducer"
+    title: "BinaryOperatorAggregate ignores default_factory"
     subsystem: state
     spec: |
-      Fix LangGraph state channel initialization for dataclass
-      fields that have both a default value and a reducer (Annotated
-      with operator.add or similar). Currently, if a dataclass field
-      has a default_factory or default value AND a reducer annotation,
-      the default is silently dropped during channel construction.
-      The fix should preserve defaults while still applying the
-      reducer for updates.
+      Fix BinaryOperatorAggregate.__init__() in channels/binop.py so
+      that dataclass field default_factory values are used as the
+      channel's initial value. Currently __init__() always calls
+      typ() (e.g., list() = []), ignoring any default or
+      default_factory on the dataclass field. The fix should wire
+      dataclass defaults through the channel construction pipeline
+      so that initial state matches the dataclass definition.
 
   - id: "F7"
-    title: "END routing in conditional edges"
-    subsystem: graph
-    spec: |
-      Fix routing to END from conditional_entry_point and
-      add_conditional_edges when the routing function returns END
-      as one of several possible destinations. Currently, returning
-      END from a conditional edge that also has non-END targets
-      causes a validation error during graph compilation. The fix
-      should allow END as a valid routing target in mixed conditional
-      edges.
-
-  - id: "F8"
-    title: "messages_key streaming filter"
+    title: "Nested message detection in stream_mode=messages"
     subsystem: streaming
     spec: |
-      Fix the streaming output so that when a graph is configured
-      with a custom messages_key (not the default "messages"), the
-      stream events correctly filter and emit only the messages from
-      the configured key. Currently, custom messages_key values are
-      ignored during streaming, causing either no message events or
-      events from the wrong state key.
+      Fix _find_and_emit_messages() in pregel/_messages.py so that
+      messages nested inside Pydantic models, dataclasses, or
+      dict-within-state objects are found and emitted during
+      stream_mode="messages" streaming. Currently the function only
+      scans two levels: top-level state field values, then one level
+      of Sequence. Messages in nested objects are silently dropped.
+      The fix should recursively traverse nested structures.
+
+  - id: "F8"
+    title: "Input message dedup for nested structures"
+    subsystem: streaming
+    spec: |
+      Fix on_chain_start() in pregel/_messages.py so that messages
+      nested in Pydantic models, dataclasses, or dicts within the
+      input state are added to the `seen` set for deduplication.
+      Currently only top-level and one-level-deep sequence messages
+      are tracked. When a node receives nested messages in input and
+      returns them flattened in output, they are incorrectly emitted
+      as "new" duplicates. The fix should recursively scan input
+      structures for message IDs.
 
 feature_assignments:
   explicit:
@@ -115,8 +119,8 @@ correlation_pairs:
   - name: "state_management"
     feature_a: "F5"
     feature_b: "F6"
-    shared: "Both fix Pydantic/dataclass interaction in channel init"
-  - name: "graph_api"
+    shared: "Both fix channel creation pipeline (state.py -> binop.py)"
+  - name: "streaming_messages"
     feature_a: "F7"
     feature_b: "F8"
-    shared: "Both modify graph compilation/execution behavior"
+    shared: "Both fix _messages.py (emission + dedup)"

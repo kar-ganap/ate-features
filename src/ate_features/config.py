@@ -56,6 +56,7 @@ def load_treatments(config_dir: Path = DEFAULT_CONFIG_DIR) -> TreatmentConfig:
             Treatment(
                 id=t["id"],
                 label=t["label"],
+                paired_with=t.get("paired_with"),
                 dimensions=TreatmentDimensions(**t["dimensions"]),
                 execution=ExecutionConfig(**t["execution"]),
             )
@@ -75,3 +76,17 @@ def load_treatments(config_dir: Path = DEFAULT_CONFIG_DIR) -> TreatmentConfig:
         feature_assignments=feature_assignments,
         correlation_pairs=correlation_pairs,
     )
+
+
+def load_communication_nudges(
+    config_dir: Path = DEFAULT_CONFIG_DIR,
+) -> dict[str, dict[str, str]]:
+    """Load communication nudge prompts from YAML."""
+    nudges_path = config_dir / "prompts" / "communication_nudges.yaml"
+    if not nudges_path.exists():
+        msg = f"communication_nudges.yaml not found at {nudges_path}"
+        raise FileNotFoundError(msg)
+
+    with open(nudges_path) as f:
+        result: dict[str, dict[str, str]] = yaml.safe_load(f)
+    return result
