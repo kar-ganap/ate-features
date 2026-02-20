@@ -239,3 +239,79 @@ def render_session_guide(
     sections.append("")
 
     return "\n".join(sections)
+
+
+# --- Scaffolding ---
+
+
+def scaffold_treatment(
+    treatment_id: int | str,
+    *,
+    data_dir: Path = DEFAULT_DATA_DIR,
+) -> list[Path]:
+    """Create session directory structure for a treatment.
+
+    Per-feature treatments (0b, 6) get one directory per feature.
+    All others get a single session directory.
+    Returns list of created file paths.
+    """
+    from ate_features.config import load_features, load_treatments
+
+    config = load_treatments()
+    treatment = next(t for t in config.treatments if t.id == treatment_id)
+    features = load_features().features
+
+    created: list[Path] = []
+
+    if is_per_feature_treatment(treatment):
+        for feat in features:
+            run_dir = get_run_dir(treatment_id, feature_id=feat.id, data_dir=data_dir)
+            created.extend(
+                _scaffold_session(treatment, [feat], run_dir)
+            )
+    else:
+        run_dir = get_run_dir(treatment_id, data_dir=data_dir)
+        created.extend(
+            _scaffold_session(treatment, features, run_dir)
+        )
+
+    return created
+
+
+def _scaffold_session(
+    treatment: Treatment,
+    features: list[Feature],
+    run_dir: Path,
+) -> list[Path]:
+    """Create session files in a run directory."""
+    run_dir.mkdir(parents=True, exist_ok=True)
+    created: list[Path] = []
+
+    # Session guide (always overwritten)
+    guide_path = run_dir / "session_guide.md"
+    guide_path.write_text(render_session_guide(treatment, features, run_dir))
+    created.append(guide_path)
+
+    # Metadata (always overwritten with fresh template)
+    from ate_features.models import ExecutionMode, RunMetadata
+
+    meta = RunMetadata(
+        treatment_id=treatment.id,
+        feature_ids=[f.id for f in features],
+        mode=ExecutionMode(treatment.execution.mode),
+        agent_teams_enabled=uses_agent_teams(treatment),
+        team_size=treatment.dimensions.team_size,
+    )
+    meta_path = save_metadata(meta, run_dir)
+    created.append(meta_path)
+
+    # Notes (never overwritten)
+    notes_path = run_dir / "notes.md"
+    if not notes_path.exists():
+        notes_path.write_text(
+            f"# Notes: Treatment {treatment.id}\n\n"
+            "<!-- Add session observations here -->\n"
+        )
+    created.append(notes_path)
+
+    return created
