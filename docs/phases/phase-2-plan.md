@@ -12,8 +12,8 @@ directory management, and patch utilities.
 1. **Harness module** (`src/ate_features/harness.py`): directory management,
    treatment introspection, prompt generation, session guides, scaffolding,
    patch management
-2. **Specialization definitions** (`config/specializations/agent_{1-4}.md`):
-   subsystem domain context for specialized treatments
+2. **Specialization definitions** (`config/specializations/serde_*.md`):
+   subsystem domain context for specialized treatments, named by content
 3. **Model updates**: T4 acceptance tier, RunMetadata
 4. **Config extension**: `load_specialization()` loader
 5. **CLI extensions**: `exec scaffold`, `exec status` commands

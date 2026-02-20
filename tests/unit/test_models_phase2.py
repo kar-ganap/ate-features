@@ -1,6 +1,6 @@
 """Tests for Phase 2 model additions: T4 tier, RunMetadata."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from ate_features.models import (
     AcceptanceTier,
@@ -88,7 +88,7 @@ class TestRunMetadata:
         assert meta.agent_teams_enabled is False
 
     def test_create_full(self) -> None:
-        now = datetime.now(tz=datetime.UTC)
+        now = datetime.now(tz=UTC)
         meta = RunMetadata(
             treatment_id=1,
             feature_ids=["F1", "F2", "F5", "F6"],
@@ -118,7 +118,7 @@ class TestRunMetadata:
         assert meta.notes is None
 
     def test_model_dump_serializable(self) -> None:
-        now = datetime.now(tz=datetime.UTC)
+        now = datetime.now(tz=UTC)
         meta = RunMetadata(
             treatment_id=1,
             feature_ids=["F1", "F5"],
