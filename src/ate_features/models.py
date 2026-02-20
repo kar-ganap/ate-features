@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
@@ -20,6 +21,7 @@ class AcceptanceTier(StrEnum):
     T1_BASIC = "t1_basic"
     T2_EDGE = "t2_edge"
     T3_QUALITY = "t3_quality"
+    T4_SMOKE = "t4_smoke"
 
 
 class Decomposition(StrEnum):
@@ -157,6 +159,8 @@ class TieredScore(BaseModel):
     t2_total: int = Field(ge=0)
     t3_passed: int = Field(ge=0)
     t3_total: int = Field(ge=0)
+    t4_passed: int = Field(default=0, ge=0)
+    t4_total: int = Field(default=0, ge=0)
 
     @property
     def t1_score(self) -> float:
@@ -169,3 +173,26 @@ class TieredScore(BaseModel):
     @property
     def t3_score(self) -> float:
         return self.t3_passed / self.t3_total if self.t3_total > 0 else 0.0
+
+    @property
+    def t4_score(self) -> float:
+        return self.t4_passed / self.t4_total if self.t4_total > 0 else 0.0
+
+
+# --- Run Tracking ---
+
+
+class RunMetadata(BaseModel):
+    """Metadata for a single treatment execution session."""
+
+    treatment_id: int | str
+    feature_ids: list[str] = Field(default_factory=list)
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    wall_clock_seconds: float | None = None
+    session_id: str | None = None
+    model: str | None = None
+    mode: ExecutionMode
+    agent_teams_enabled: bool = False
+    team_size: TeamSize | None = None
+    notes: str | None = None
