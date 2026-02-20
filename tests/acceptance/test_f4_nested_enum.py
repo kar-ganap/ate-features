@@ -4,8 +4,6 @@ Top-level Enum values round-trip correctly, but when nested inside containers
 (lists, dicts, dataclass fields), they deserialize as plain string/int.
 """
 
-from __future__ import annotations
-
 import dataclasses
 from enum import Enum, IntEnum
 
@@ -198,3 +196,78 @@ class TestT3Quality:
 
         assert all(isinstance(s, Status) for s in result["statuses"])
         assert len(result["statuses"]) == 1000
+
+
+class TestT4Smoke:
+    """Smoke/integration tests — realistic multi-node workflows."""
+
+    def test_nested_enum_survives_graph_checkpoint(self) -> None:
+        """Enum values nested in dicts survive checkpoint round-trip."""
+        import operator
+        from typing import Annotated
+
+        from langgraph.checkpoint.memory import InMemorySaver
+        from langgraph.graph import StateGraph
+        from typing_extensions import TypedDict
+
+        class State(TypedDict):
+            log: Annotated[list[str], operator.add]
+            tasks: dict[str, Status]
+
+        def step_1(state: State) -> dict:
+            return {
+                "log": ["step_1"],
+                "tasks": {"a": Status.ACTIVE, "b": Status.INACTIVE},
+            }
+
+        def step_2(state: State) -> dict:
+            return {"log": ["step_2"]}
+
+        graph = StateGraph(State)
+        graph.add_node("step_1", step_1)
+        graph.add_node("step_2", step_2)
+        graph.add_edge("step_1", "step_2")
+        graph.set_entry_point("step_1")
+        graph.set_finish_point("step_2")
+
+        memory = InMemorySaver()
+        compiled = graph.compile(checkpointer=memory)
+        config = {"configurable": {"thread_id": "f4-smoke"}}
+
+        result = compiled.invoke({"log": [], "tasks": {}}, config=config)
+        assert result["log"] == ["step_1", "step_2"]
+        assert isinstance(result["tasks"]["a"], Status)
+        assert isinstance(result["tasks"]["b"], Status)
+
+        state = compiled.get_state(config)
+        assert isinstance(state.values["tasks"]["a"], Status)
+
+    def test_enum_list_accumulates_across_nodes(self) -> None:
+        """List of enums accumulates across nodes and preserves types."""
+        import operator
+        from typing import Annotated
+
+        from langgraph.graph import END, StateGraph
+        from typing_extensions import TypedDict
+
+        class State(TypedDict):
+            statuses: Annotated[list[Status], operator.add]
+            count: int
+
+        def add_status(state: State) -> dict:
+            status = Status.ACTIVE if state["count"] % 2 == 0 else Status.INACTIVE
+            return {"statuses": [status], "count": state["count"] + 1}
+
+        def route(state: State) -> str:
+            return END if state["count"] >= 3 else "add_status"
+
+        graph = StateGraph(State)
+        graph.add_node("add_status", add_status)
+        graph.add_conditional_edges("add_status", route)
+        graph.set_entry_point("add_status")
+        compiled = graph.compile()
+
+        result = compiled.invoke({"statuses": [], "count": 0})
+        assert len(result["statuses"]) == 3
+        assert all(isinstance(s, Status) for s in result["statuses"])
+        assert result["statuses"] == [Status.ACTIVE, Status.INACTIVE, Status.ACTIVE]

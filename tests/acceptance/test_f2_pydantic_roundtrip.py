@@ -4,8 +4,6 @@ The serializer handles basic Pydantic V2 via EXT_PYDANTIC_V2, but Generic
 BaseModel subclasses and complex field configurations don't survive round-trips.
 """
 
-from __future__ import annotations
-
 from typing import Generic, TypeVar
 
 from pydantic import BaseModel, Field, field_validator
@@ -213,3 +211,85 @@ class TestT3Quality:
         assert isinstance(result["m"], OptionalModel)
         # The fields that were explicitly set should be tracked
         assert "required" in result["m"].model_fields_set
+
+
+class TestT4Smoke:
+    """Smoke/integration tests — realistic multi-node workflows."""
+
+    def test_pydantic_model_survives_graph_checkpoint(self) -> None:
+        """Nested Pydantic model in state survives checkpoint round-trip."""
+        import operator
+        from typing import Annotated
+
+        from langgraph.checkpoint.memory import InMemorySaver
+        from langgraph.graph import StateGraph
+        from typing_extensions import TypedDict
+
+        class State(TypedDict):
+            log: Annotated[list[str], operator.add]
+            model: NestedOuter
+
+        def step_1(state: State) -> dict:
+            inner = SimpleModel(name="from_step1", value=42)
+            return {
+                "log": ["step_1"],
+                "model": NestedOuter(inner=inner, label="outer"),
+            }
+
+        def step_2(state: State) -> dict:
+            return {"log": ["step_2"]}
+
+        graph = StateGraph(State)
+        graph.add_node("step_1", step_1)
+        graph.add_node("step_2", step_2)
+        graph.add_edge("step_1", "step_2")
+        graph.set_entry_point("step_1")
+        graph.set_finish_point("step_2")
+
+        memory = InMemorySaver()
+        compiled = graph.compile(checkpointer=memory)
+        config = {"configurable": {"thread_id": "f2-smoke"}}
+
+        init_model = NestedOuter(
+            inner=SimpleModel(name="init", value=0), label="init"
+        )
+        result = compiled.invoke(
+            {"log": [], "model": init_model}, config=config
+        )
+        assert result["log"] == ["step_1", "step_2"]
+        assert isinstance(result["model"], NestedOuter)
+        assert isinstance(result["model"].inner, SimpleModel)
+        assert result["model"].inner.name == "from_step1"
+
+        state = compiled.get_state(config)
+        assert isinstance(state.values["model"], NestedOuter)
+
+    def test_generic_model_survives_graph_execution(self) -> None:
+        """Generic Pydantic model in state survives graph execution."""
+        from langgraph.graph import END, StateGraph
+        from typing_extensions import TypedDict
+
+        class State(TypedDict):
+            model: GenericModel[int]
+            done: bool
+
+        def produce(state: State) -> dict:
+            return {
+                "model": GenericModel[int](data=99, label="produced"),
+                "done": True,
+            }
+
+        def route(state: State) -> str:
+            return END if state["done"] else "produce"
+
+        graph = StateGraph(State)
+        graph.add_node("produce", produce)
+        graph.add_conditional_edges("produce", route)
+        graph.set_entry_point("produce")
+        compiled = graph.compile()
+
+        result = compiled.invoke(
+            {"model": GenericModel[int](data=0, label="init"), "done": False}
+        )
+        assert isinstance(result["model"], GenericModel)
+        assert result["model"].data == 99
