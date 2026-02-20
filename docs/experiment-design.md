@@ -121,9 +121,14 @@ For each feature x treatment:
 
 ### Communication Analysis
 
-Same methodology as predecessor experiment:
+Enhanced from predecessor experiment:
 - Only `SendMessage(recipient=<peer>)` with routing metadata counts
-- Transcript JSONL analysis for inter-agent communication frequency and content
+- Structured transcript parser (`src/ate_features/communication.py`) extracts
+  sender, recipient, content, and auto-classifies taxonomy
+- Pattern-quality nudges (`config/prompts/communication_nudges.yaml`) enrich
+  the encourage/discourage dimension with concrete examples of useful vs
+  wasteful communication
+- CLI support: `ate-features comms parse <session-id>`
 
 ## 9. Execution Protocol
 
@@ -134,3 +139,5 @@ TBD — detailed in Phase 2.
 | Date | Change | Rationale |
 |------|--------|-----------|
 | 2026-02-20 | Initial design | Phase 0 scaffolding |
+| 2026-02-20 | Phase 1: pinned LangGraph, 88 acceptance tests, communication infrastructure | Baseline for treatments |
+| 2026-02-20 | Flag: F7 (END routing) all 11 tests pass on pinned commit | May need replacement feature |
