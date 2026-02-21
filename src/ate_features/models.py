@@ -191,6 +191,13 @@ class TieredScore(BaseModel):
 # --- Run Tracking ---
 
 
+class PreflightResult(BaseModel):
+    """Result of preflight checks before a session."""
+
+    issues: list[str] = Field(default_factory=list)
+    claude_code_version: str = "unknown"
+
+
 class RunMetadata(BaseModel):
     """Metadata for a single treatment execution session."""
 

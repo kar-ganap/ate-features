@@ -9,6 +9,7 @@ from pathlib import Path
 from ate_features.models import (
     Feature,
     FeatureAssignment,
+    PreflightResult,
     PromptSpecificity,
     RunMetadata,
     Specialization,
@@ -17,6 +18,77 @@ from ate_features.models import (
 )
 
 DEFAULT_DATA_DIR = Path(__file__).parent.parent.parent / "data"
+
+
+# --- Preflight Checks ---
+
+
+def preflight_check(
+    langgraph_dir: Path,
+    *,
+    expected_pin: str | None = None,
+) -> PreflightResult:
+    """Run preflight checks on the LangGraph directory.
+
+    Checks:
+    1. Directory exists
+    2. .git directory exists
+    3. HEAD matches expected pin
+    4. Working tree is clean
+    5. Records Claude Code version (informational)
+
+    Returns PreflightResult with issues list and recorded CC version.
+    """
+    issues: list[str] = []
+
+    # 1. Directory exists
+    if not langgraph_dir.exists():
+        issues.append(f"LangGraph directory does not exist: {langgraph_dir}")
+        return PreflightResult(issues=issues)
+
+    # 2. .git exists
+    if not (langgraph_dir / ".git").exists():
+        issues.append(f"No .git directory in {langgraph_dir}")
+        return PreflightResult(issues=issues)
+
+    # 3. HEAD matches expected pin
+    if expected_pin is not None:
+        head_result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=langgraph_dir,
+            capture_output=True,
+            text=True,
+        )
+        head = head_result.stdout.strip()
+        if not head.startswith(expected_pin):
+            issues.append(
+                f"Commit mismatch: HEAD={head[:12]}, expected={expected_pin[:12]}"
+            )
+
+    # 4. Clean working tree
+    status_result = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=langgraph_dir,
+        capture_output=True,
+        text=True,
+    )
+    if status_result.stdout.strip():
+        issues.append("Working tree is not clean (dirty)")
+
+    # 5. Record CC version (informational, never an issue)
+    cc_version = "unknown"
+    try:
+        cc_result = subprocess.run(
+            ["claude", "--version"],
+            capture_output=True,
+            text=True,
+        )
+        if cc_result.returncode == 0 and cc_result.stdout.strip():
+            cc_version = cc_result.stdout.strip()
+    except FileNotFoundError:
+        pass
+
+    return PreflightResult(issues=issues, claude_code_version=cc_version)
 
 
 def get_run_dir(

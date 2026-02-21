@@ -78,6 +78,31 @@ def comms_summary(session_id: str, treatment_id: str) -> None:
             typer.echo(f"  {tax}: {count}")
 
 
+@exec_app.command("preflight")
+def exec_preflight(
+    langgraph_dir: str = "data/langgraph",
+) -> None:
+    """Run preflight checks on the LangGraph directory."""
+    from pathlib import Path
+
+    from ate_features.config import load_features
+    from ate_features.harness import preflight_check
+
+    lg_path = Path(langgraph_dir)
+    portfolio = load_features()
+
+    result = preflight_check(lg_path, expected_pin=portfolio.langgraph_pin)
+
+    if result.issues:
+        typer.echo("Preflight FAILED:")
+        for issue in result.issues:
+            typer.echo(f"  - {issue}")
+    else:
+        typer.echo("Preflight PASSED")
+
+    typer.echo(f"Claude Code version: {result.claude_code_version}")
+
+
 @exec_app.command("scaffold")
 def exec_scaffold(
     treatment_id: str,
