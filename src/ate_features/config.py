@@ -117,6 +117,20 @@ def load_scoring_config(
     return result
 
 
+def load_execution_config(
+    config_dir: Path = DEFAULT_CONFIG_DIR,
+) -> dict[str, object]:
+    """Load execution parameters (escape threshold, transcript path) from YAML."""
+    exec_path = config_dir / "execution.yaml"
+    if not exec_path.exists():
+        msg = f"execution.yaml not found at {exec_path}"
+        raise FileNotFoundError(msg)
+
+    with open(exec_path) as f:
+        result: dict[str, object] = yaml.safe_load(f)
+    return result
+
+
 def load_communication_nudges(
     config_dir: Path = DEFAULT_CONFIG_DIR,
 ) -> dict[str, dict[str, str]]:
