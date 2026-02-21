@@ -1,18 +1,18 @@
-# Runbook: Treatment 7 — Specialized Structured Team
+# Runbook: Treatment 0a — Control: Full Context
 
-**Treatment**: 7 (Specialized Structured Team)
-**Description**: 1 interactive Claude Code session with Agent Teams. Team size: 4x2. Delegate mode ON. Detailed prompts with full specs. Communication: neutral.
+**Treatment**: 0a (Control: Full Context)
+**Description**: 1 interactive Claude Code session covering all 8 features sequentially. Detailed prompts with full specs.
 **Expected Duration**: 2-6 hours
-**Agent Teams**: ON (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude`)
+**Agent Teams**: OFF
 
 | Dimension | Value |
 |-----------|-------|
 | Decomposition | **Explicit** |
 | Prompt specificity | detailed |
-| Delegate mode | True |
-| Team size | 4x2 |
-| Communication | neutral |
-| Specialization | specialized |
+| Delegate mode | None |
+| Team size | 1x8 |
+| Communication | None |
+| Specialization | vanilla |
 
 ---
 
@@ -32,19 +32,19 @@ ate-features exec preflight
 ### 1.2 Scaffold session directories
 
 ```bash
-ate-features exec scaffold 7
+ate-features exec scaffold 0a
 ```
 
-- [ ] `data/transcripts/treatment-7/` created
+- [ ] `data/transcripts/treatment-0a/` created
 - [ ] `session_guide.md`, `metadata.json`, `notes.md` present
 
 ### 1.3 Create patches directory
 
 ```bash
-mkdir -p data/patches/treatment-7
+mkdir -p data/patches/treatment-0a
 ```
 
-- [ ] `data/patches/treatment-7/` exists
+- [ ] `data/patches/treatment-0a/` exists
 
 ### 1.4 Verify LangGraph is clean
 
@@ -71,10 +71,10 @@ Launch Claude Code:
 
 ```bash
 cd data/langgraph
-CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude
+claude
 ```
 
-- [ ] Confirmed: launched with `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude`
+- [ ] Confirmed: launched with plain `claude` (NOT `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude`)
 
 ### 2.1 Paste the opening prompt
 
@@ -184,19 +184,19 @@ structures for message IDs.
 
 **Tests:** `tests/acceptance/test_f8_*.py`
 
-## Feature Assignments
-
-- **Agent 1:** F1, F5
-- **Agent 2:** F2, F6
-- **Agent 3:** F3, F7
-- **Agent 4:** F4, F8
-
 ## Patch Instructions
 
-**CRITICAL:** After implementing **each** feature, save your patch by running `git diff > data/patches/treatment-7/<FN>.patch` (replacing `<FN>` with the feature ID, e.g., `F1`, `F2`, etc.), then reset with `git checkout . && git clean -fd` before moving to the next feature. If you cannot produce a fix for a feature, save an empty patch and move on.
+**CRITICAL:** Implement all features on the **same working tree**. Do NOT reset between features — each feature builds on the prior changes.
+
+After implementing **each** feature, snapshot your work:
+1. `git diff > data/patches/treatment-0a/<FN>.patch`
+2. `git add -A`
+
+When **all** features are complete, save the combined patch:
+`git diff --staged > data/patches/treatment-0a/cumulative.patch`
 
 
-Remember: save each patch with `git diff > data/patches/treatment-7/<FN>.patch` and reset with `git checkout . && git clean -fd` before starting the next feature. Start with F1.
+Remember: after each feature, snapshot with `git diff > data/patches/treatment-0a/<FN>.patch` then `git add -A`. When all features are done, save the combined patch with `git diff --staged > data/patches/treatment-0a/cumulative.patch`. Start with F1.
 ````
 
 ---
@@ -220,10 +220,9 @@ Glance at the session every **2-3 minutes**. You do not need to watch continuous
 | Agent going in circles (re-reading same files, same approach) | Note time; prepare to nudge at threshold |
 | Agent asks a clarifying question | Answer promptly |
 | Agent forgot to save patch before next feature | Intervene immediately (see nudge examples) |
-| Agent forgot to reset (`git checkout . && git clean -fd`) | Intervene immediately |
 | Agent stuck on unrelated build/test errors | Nudge toward a different approach |
 | No output for >2 minutes | Check if waiting for input |
-| Lead forming team and delegating | Note the confirmation |
+| Agent completed all features but not yet saved final patch | Remind to save cumulative.patch |
 
 ### 3.3 Escape time thresholds
 
@@ -235,35 +234,19 @@ Use these as templates. Adapt to the situation.
 
 **If stuck on a feature past the threshold:**
 ```
-Let's move on. Save whatever patch you have (even if incomplete) with:
-git diff > data/patches/treatment-7/<feature-id>.patch
-Then reset with: git checkout . && git clean -fd
-And proceed to the next feature.
+Let's move on to the next feature. You'll save a final combined patch at the end.
 ```
 
-**If agent forgot to save a patch:**
+**If agent completed all features but forgot patch:**
 ```
-Before moving on, please save the patch for the feature you just finished:
-git diff > data/patches/treatment-7/<feature-id>.patch
-Then reset: git checkout . && git clean -fd
-```
-
-**If agent forgot to reset LangGraph:**
-```
-Please reset the LangGraph source before starting the next feature:
-git checkout . && git clean -fd
-Verify with: git diff --stat
+Great! Now save your combined patch with:
+git diff --staged > data/patches/treatment-0a/cumulative.patch
 ```
 
 **If agent is going in circles:**
 ```
 You seem to be revisiting the same approach. Can you try a different angle?
-If you're stuck, it's OK to save what you have and move on to the next feature.
-```
-
-**If a specific agent is stuck (team treatments):**
-```
-Agent [N] seems stuck on [feature]. Can it try a different approach?
+If you're stuck, it's OK to move on to the next feature.
 ```
 
 ### 3.5 Per-feature tracking
@@ -300,21 +283,20 @@ date -u +"%Y-%m-%dT%H:%M:%SZ"
 git -C data/langgraph diff --stat
 ```
 
-If there are uncommitted changes, save them as a remaining patch:
+If the agent did not save the final combined patch, save it now:
 
 ```bash
-git -C data/langgraph diff > data/patches/treatment-7/remaining.patch
-git -C data/langgraph checkout . && git -C data/langgraph clean -fd
+git -C data/langgraph diff > data/patches/treatment-0a/cumulative.patch
 ```
 
 ### 4.3 Verify patches
 
 ```bash
-ate-features exec verify-patches 7
-ls -la data/patches/treatment-7/
+ate-features exec verify-patches 0a
+ls -la data/patches/treatment-0a/
 ```
 
-Expected: up to 8 files (`F1.patch` through `F8.patch`). Some may be empty (0 bytes) if the agent could not implement that feature.
+Expected: `cumulative.patch` (combined result) plus per-feature snapshots (`F1.patch` through `F8.patch`).
 
 - [ ] Verified patch files present
 - [ ] Non-empty patches: `___________`
@@ -322,6 +304,7 @@ Expected: up to 8 files (`F1.patch` through `F8.patch`). Some may be empty (0 by
 ### 4.4 Verify LangGraph is clean
 
 ```bash
+git -C data/langgraph checkout . && git -C data/langgraph clean -fd
 git -C data/langgraph status
 ```
 
@@ -329,7 +312,7 @@ git -C data/langgraph status
 
 ### 4.5 Update metadata.json
 
-Update `data/transcripts/treatment-7/metadata.json` with actual timing and outcome data:
+Update `data/transcripts/treatment-0a/metadata.json` with actual timing and outcome data:
 
 ```json
 {
@@ -346,16 +329,10 @@ Update `data/transcripts/treatment-7/metadata.json` with actual timing and outco
 
 ### 4.6 Write session notes
 
-Record observations in `data/transcripts/treatment-7/notes.md`. Use this format:
+Record observations in `data/transcripts/treatment-0a/notes.md`. Use this format:
 
 ```markdown
-# Notes: Treatment 7 — Specialized Structured Team
-
-## Assignment Confirmation
-- Agent 1: F1, F5 (confirmed by lead)
-- Agent 2: F2, F6 (confirmed by lead)
-- Agent 3: F3, F7 (confirmed by lead)
-- Agent 4: F4, F8 (confirmed by lead)
+# Notes: Treatment 0a — Control: Full Context
 
 ## Timeline
 - HH:MM Session started
@@ -370,9 +347,6 @@ Record observations in `data/transcripts/treatment-7/notes.md`. Use this format:
 
 ## Interventions
 - (timestamp): (what you said)
-
-## Inter-Agent Communication
-- (any SendMessage events between agents)
 
 ## Observations
 - Notable behavior: (anything interesting)
@@ -397,10 +371,10 @@ Look for the most recent `.jsonl` file matching the session time.
 
 ## 5. Final Checklist
 
-- [ ] Agent Teams env var was set
+- [ ] No Agent Teams env var was set (plain `claude`)
 - [ ] All 8 features were attempted
-- [ ] Patches saved for each feature (even if empty)
-- [ ] LangGraph was reset between features
+- [ ] Per-feature snapshots saved
+- [ ] cumulative.patch saved (combined result)
 - [ ] LangGraph is clean after final feature
 - [ ] Per-feature timing recorded in monitoring table
 - [ ] metadata.json updated with actual data

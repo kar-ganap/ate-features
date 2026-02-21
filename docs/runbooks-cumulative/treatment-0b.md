@@ -1,6 +1,6 @@
-# Runbook: Treatment 6 — Specialized Swim Lanes
+# Runbook: Treatment 0b — Control: Swim Lanes
 
-**Treatment**: 6 (Specialized Swim Lanes)
+**Treatment**: 0b (Control: Swim Lanes)
 **Description**: 8 separate interactive Claude Code sessions, one per feature. Detailed prompts with full specs.
 **Expected Duration**: 2-6 hours
 **Agent Teams**: OFF
@@ -12,7 +12,7 @@
 | Delegate mode | None |
 | Team size | 8x1 |
 | Communication | None |
-| Specialization | specialized |
+| Specialization | vanilla |
 
 ---
 
@@ -32,19 +32,19 @@ ate-features exec preflight
 ### 1.2 Scaffold session directories
 
 ```bash
-ate-features exec scaffold 6
+ate-features exec scaffold 0b
 ```
 
-- [ ] `data/transcripts/treatment-6/` created
+- [ ] `data/transcripts/treatment-0b/` created
 - [ ] `session_guide.md`, `metadata.json`, `notes.md` present
 
 ### 1.3 Create patches directory
 
 ```bash
-mkdir -p data/patches/treatment-6
+mkdir -p data/patches/treatment-0b
 ```
 
-- [ ] `data/patches/treatment-6/` exists
+- [ ] `data/patches/treatment-0b/` exists
 
 ### 1.4 Verify LangGraph is clean
 
@@ -103,10 +103,17 @@ multi-index structures.
 
 ## Patch Instructions
 
-**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-6/F1.patch`, then reset with `git checkout . && git clean -fd`.
+**CRITICAL:** Implement all features on the **same working tree**. Do NOT reset between features — each feature builds on the prior changes.
+
+After implementing **each** feature, snapshot your work:
+1. `git diff > data/patches/treatment-0b/<FN>.patch`
+2. `git add -A`
+
+When **all** features are complete, save the combined patch:
+`git diff --staged > data/patches/treatment-0b/cumulative.patch`
 
 
-Remember: save your patch with `git diff > data/patches/treatment-6/F1.patch` and reset with `git checkout . && git clean -fd` when done.
+Remember: after each feature, snapshot with `git diff > data/patches/treatment-0b/<FN>.patch` then `git add -A`. When all features are done, save the combined patch with `git diff --staged > data/patches/treatment-0b/cumulative.patch`. Start with F1.
 ````
 
 - [ ] Pasted opening prompt
@@ -146,10 +153,17 @@ preserving the original type information.
 
 ## Patch Instructions
 
-**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-6/F2.patch`, then reset with `git checkout . && git clean -fd`.
+**CRITICAL:** Implement all features on the **same working tree**. Do NOT reset between features — each feature builds on the prior changes.
+
+After implementing **each** feature, snapshot your work:
+1. `git diff > data/patches/treatment-0b/<FN>.patch`
+2. `git add -A`
+
+When **all** features are complete, save the combined patch:
+`git diff --staged > data/patches/treatment-0b/cumulative.patch`
 
 
-Remember: save your patch with `git diff > data/patches/treatment-6/F2.patch` and reset with `git checkout . && git clean -fd` when done.
+Remember: after each feature, snapshot with `git diff > data/patches/treatment-0b/<FN>.patch` then `git add -A`. When all features are done, save the combined patch with `git diff --staged > data/patches/treatment-0b/cumulative.patch`. Start with F2.
 ````
 
 - [ ] Pasted opening prompt
@@ -188,10 +202,17 @@ attributes work correctly after deserialization.
 
 ## Patch Instructions
 
-**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-6/F3.patch`, then reset with `git checkout . && git clean -fd`.
+**CRITICAL:** Implement all features on the **same working tree**. Do NOT reset between features — each feature builds on the prior changes.
+
+After implementing **each** feature, snapshot your work:
+1. `git diff > data/patches/treatment-0b/<FN>.patch`
+2. `git add -A`
+
+When **all** features are complete, save the combined patch:
+`git diff --staged > data/patches/treatment-0b/cumulative.patch`
 
 
-Remember: save your patch with `git diff > data/patches/treatment-6/F3.patch` and reset with `git checkout . && git clean -fd` when done.
+Remember: after each feature, snapshot with `git diff > data/patches/treatment-0b/<FN>.patch` then `git add -A`. When all features are done, save the combined patch with `git diff --staged > data/patches/treatment-0b/cumulative.patch`. Start with F3.
 ````
 
 - [ ] Pasted opening prompt
@@ -231,10 +252,17 @@ the EXT_CONSTRUCTOR mechanism.
 
 ## Patch Instructions
 
-**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-6/F4.patch`, then reset with `git checkout . && git clean -fd`.
+**CRITICAL:** Implement all features on the **same working tree**. Do NOT reset between features — each feature builds on the prior changes.
+
+After implementing **each** feature, snapshot your work:
+1. `git diff > data/patches/treatment-0b/<FN>.patch`
+2. `git add -A`
+
+When **all** features are complete, save the combined patch:
+`git diff --staged > data/patches/treatment-0b/cumulative.patch`
 
 
-Remember: save your patch with `git diff > data/patches/treatment-6/F4.patch` and reset with `git checkout . && git clean -fd` when done.
+Remember: after each feature, snapshot with `git diff > data/patches/treatment-0b/<FN>.patch` then `git add -A`. When all features are done, save the combined patch with `git diff --staged > data/patches/treatment-0b/cumulative.patch`. Start with F4.
 ````
 
 - [ ] Pasted opening prompt
@@ -275,10 +303,17 @@ for a callable with a 2-parameter signature.
 
 ## Patch Instructions
 
-**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-6/F5.patch`, then reset with `git checkout . && git clean -fd`.
+**CRITICAL:** Implement all features on the **same working tree**. Do NOT reset between features — each feature builds on the prior changes.
+
+After implementing **each** feature, snapshot your work:
+1. `git diff > data/patches/treatment-0b/<FN>.patch`
+2. `git add -A`
+
+When **all** features are complete, save the combined patch:
+`git diff --staged > data/patches/treatment-0b/cumulative.patch`
 
 
-Remember: save your patch with `git diff > data/patches/treatment-6/F5.patch` and reset with `git checkout . && git clean -fd` when done.
+Remember: after each feature, snapshot with `git diff > data/patches/treatment-0b/<FN>.patch` then `git add -A`. When all features are done, save the combined patch with `git diff --staged > data/patches/treatment-0b/cumulative.patch`. Start with F5.
 ````
 
 - [ ] Pasted opening prompt
@@ -318,10 +353,17 @@ so that initial state matches the dataclass definition.
 
 ## Patch Instructions
 
-**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-6/F6.patch`, then reset with `git checkout . && git clean -fd`.
+**CRITICAL:** Implement all features on the **same working tree**. Do NOT reset between features — each feature builds on the prior changes.
+
+After implementing **each** feature, snapshot your work:
+1. `git diff > data/patches/treatment-0b/<FN>.patch`
+2. `git add -A`
+
+When **all** features are complete, save the combined patch:
+`git diff --staged > data/patches/treatment-0b/cumulative.patch`
 
 
-Remember: save your patch with `git diff > data/patches/treatment-6/F6.patch` and reset with `git checkout . && git clean -fd` when done.
+Remember: after each feature, snapshot with `git diff > data/patches/treatment-0b/<FN>.patch` then `git add -A`. When all features are done, save the combined patch with `git diff --staged > data/patches/treatment-0b/cumulative.patch`. Start with F6.
 ````
 
 - [ ] Pasted opening prompt
@@ -361,10 +403,17 @@ The fix should recursively traverse nested structures.
 
 ## Patch Instructions
 
-**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-6/F7.patch`, then reset with `git checkout . && git clean -fd`.
+**CRITICAL:** Implement all features on the **same working tree**. Do NOT reset between features — each feature builds on the prior changes.
+
+After implementing **each** feature, snapshot your work:
+1. `git diff > data/patches/treatment-0b/<FN>.patch`
+2. `git add -A`
+
+When **all** features are complete, save the combined patch:
+`git diff --staged > data/patches/treatment-0b/cumulative.patch`
 
 
-Remember: save your patch with `git diff > data/patches/treatment-6/F7.patch` and reset with `git checkout . && git clean -fd` when done.
+Remember: after each feature, snapshot with `git diff > data/patches/treatment-0b/<FN>.patch` then `git add -A`. When all features are done, save the combined patch with `git diff --staged > data/patches/treatment-0b/cumulative.patch`. Start with F7.
 ````
 
 - [ ] Pasted opening prompt
@@ -405,10 +454,17 @@ structures for message IDs.
 
 ## Patch Instructions
 
-**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-6/F8.patch`, then reset with `git checkout . && git clean -fd`.
+**CRITICAL:** Implement all features on the **same working tree**. Do NOT reset between features — each feature builds on the prior changes.
+
+After implementing **each** feature, snapshot your work:
+1. `git diff > data/patches/treatment-0b/<FN>.patch`
+2. `git add -A`
+
+When **all** features are complete, save the combined patch:
+`git diff --staged > data/patches/treatment-0b/cumulative.patch`
 
 
-Remember: save your patch with `git diff > data/patches/treatment-6/F8.patch` and reset with `git checkout . && git clean -fd` when done.
+Remember: after each feature, snapshot with `git diff > data/patches/treatment-0b/<FN>.patch` then `git add -A`. When all features are done, save the combined patch with `git diff --staged > data/patches/treatment-0b/cumulative.patch`. Start with F8.
 ````
 
 - [ ] Pasted opening prompt
@@ -432,9 +488,9 @@ Glance at the session every **2-3 minutes**. You do not need to watch continuous
 | Agent going in circles (re-reading same files, same approach) | Note time; prepare to nudge at threshold |
 | Agent asks a clarifying question | Answer promptly |
 | Agent forgot to save patch before next feature | Intervene immediately (see nudge examples) |
-| Agent forgot to reset (`git checkout . && git clean -fd`) | Intervene immediately |
 | Agent stuck on unrelated build/test errors | Nudge toward a different approach |
 | No output for >2 minutes | Check if waiting for input |
+| Agent completed all features but not yet saved final patch | Remind to save cumulative.patch |
 
 ### 3.3 Escape time thresholds
 
@@ -446,30 +502,19 @@ Use these as templates. Adapt to the situation.
 
 **If stuck on a feature past the threshold:**
 ```
-Let's move on. Save whatever patch you have (even if incomplete) with:
-git diff > data/patches/treatment-6/<feature-id>.patch
-Then reset with: git checkout . && git clean -fd
-And proceed to the next feature.
+Let's move on to the next feature. You'll save a final combined patch at the end.
 ```
 
-**If agent forgot to save a patch:**
+**If agent completed all features but forgot patch:**
 ```
-Before moving on, please save the patch for the feature you just finished:
-git diff > data/patches/treatment-6/<feature-id>.patch
-Then reset: git checkout . && git clean -fd
-```
-
-**If agent forgot to reset LangGraph:**
-```
-Please reset the LangGraph source before starting the next feature:
-git checkout . && git clean -fd
-Verify with: git diff --stat
+Great! Now save your combined patch with:
+git diff --staged > data/patches/treatment-0b/cumulative.patch
 ```
 
 **If agent is going in circles:**
 ```
 You seem to be revisiting the same approach. Can you try a different angle?
-If you're stuck, it's OK to save what you have and move on to the next feature.
+If you're stuck, it's OK to move on to the next feature.
 ```
 
 
@@ -491,21 +536,20 @@ date -u +"%Y-%m-%dT%H:%M:%SZ"
 git -C data/langgraph diff --stat
 ```
 
-If there are uncommitted changes, save them as a remaining patch:
+If the agent did not save the final combined patch, save it now:
 
 ```bash
-git -C data/langgraph diff > data/patches/treatment-6/remaining.patch
-git -C data/langgraph checkout . && git -C data/langgraph clean -fd
+git -C data/langgraph diff > data/patches/treatment-0b/cumulative.patch
 ```
 
 ### 4.3 Verify patches
 
 ```bash
-ate-features exec verify-patches 6
-ls -la data/patches/treatment-6/
+ate-features exec verify-patches 0b
+ls -la data/patches/treatment-0b/
 ```
 
-Expected: up to 8 files (`F1.patch` through `F8.patch`). Some may be empty (0 bytes) if the agent could not implement that feature.
+Expected: `cumulative.patch` (combined result) plus per-feature snapshots (`F1.patch` through `F8.patch`).
 
 - [ ] Verified patch files present
 - [ ] Non-empty patches: `___________`
@@ -513,6 +557,7 @@ Expected: up to 8 files (`F1.patch` through `F8.patch`). Some may be empty (0 by
 ### 4.4 Verify LangGraph is clean
 
 ```bash
+git -C data/langgraph checkout . && git -C data/langgraph clean -fd
 git -C data/langgraph status
 ```
 
@@ -520,7 +565,7 @@ git -C data/langgraph status
 
 ### 4.5 Update metadata.json
 
-Update `data/transcripts/treatment-6/metadata.json` with actual timing and outcome data:
+Update `data/transcripts/treatment-0b/metadata.json` with actual timing and outcome data:
 
 ```json
 {
@@ -537,10 +582,10 @@ Update `data/transcripts/treatment-6/metadata.json` with actual timing and outco
 
 ### 4.6 Write session notes
 
-Record observations in `data/transcripts/treatment-6/notes.md`. Use this format:
+Record observations in `data/transcripts/treatment-0b/notes.md`. Use this format:
 
 ```markdown
-# Notes: Treatment 6 — Specialized Swim Lanes
+# Notes: Treatment 0b — Control: Swim Lanes
 
 ## Timeline
 - HH:MM Session started
@@ -581,8 +626,8 @@ Look for the most recent `.jsonl` file matching the session time.
 
 - [ ] No Agent Teams env var was set (plain `claude`)
 - [ ] All 8 features were attempted
-- [ ] Patches saved for each feature (even if empty)
-- [ ] LangGraph was reset between features
+- [ ] Per-feature snapshots saved
+- [ ] cumulative.patch saved (combined result)
 - [ ] LangGraph is clean after final feature
 - [ ] Per-feature timing recorded in monitoring table
 - [ ] metadata.json updated with actual data

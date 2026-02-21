@@ -129,6 +129,7 @@ def exec_verify_patches(
 @exec_app.command("runbook")
 def exec_runbook(
     treatment_id: str,
+    mode: str = typer.Option("isolated", help="Scoring mode: isolated or cumulative"),
 ) -> None:
     """Generate and print a runbook for one treatment."""
     from ate_features.config import load_features, load_treatments
@@ -143,6 +144,7 @@ def exec_runbook(
         treatment,
         features,
         assignments=config.feature_assignments.explicit,
+        scoring_mode=mode,
     )
     typer.echo(runbook)
 
@@ -150,13 +152,14 @@ def exec_runbook(
 @exec_app.command("runbooks")
 def exec_runbooks(
     output_dir: str = "docs/runbooks",
+    mode: str = typer.Option("isolated", help="Scoring mode: isolated or cumulative"),
 ) -> None:
     """Generate all 11 runbooks to docs/runbooks/."""
     from pathlib import Path
 
     from ate_features.runbook import generate_all_runbooks, save_runbooks
 
-    runbooks = generate_all_runbooks()
+    runbooks = generate_all_runbooks(scoring_mode=mode)
     paths = save_runbooks(runbooks, Path(output_dir))
     typer.echo(f"Generated {len(paths)} runbooks:")
     for p in paths:
@@ -233,6 +236,7 @@ def _load_weights() -> dict[str, float]:
 def score_collect(
     treatment_id: str,
     langgraph_dir: str = "data/langgraph",
+    mode: str = typer.Option("isolated", help="Scoring mode: isolated or cumulative"),
 ) -> None:
     """Collect scores by applying patches and running acceptance tests."""
     from pathlib import Path
@@ -246,8 +250,8 @@ def score_collect(
         typer.echo(f"LangGraph directory not found: {lg_path}", err=True)
         raise typer.Exit(1)
 
-    typer.echo(f"Collecting scores for treatment {tid}...")
-    scores = collect_scores(tid, lg_path)
+    typer.echo(f"Collecting scores for treatment {tid} (mode={mode})...")
+    scores = collect_scores(tid, lg_path, mode=mode)
 
     if not scores:
         typer.echo("No patches found — nothing to score.")

@@ -66,7 +66,7 @@ ate-features/
 │   ├── communication.py       # Transcript parsing + communication models
 │   └── cli.py                 # CLI with comms + exec + score subcommands
 ├── tests/
-│   ├── unit/                  # Unit tests (204 tests)
+│   ├── unit/                  # Unit tests (238 tests)
 │   └── acceptance/            # LangGraph acceptance tests (104 tests)
 ├── scripts/
 │   ├── pin_langgraph.sh       # Clone pinned LangGraph
@@ -83,12 +83,16 @@ ate-features/
 
 ## Current State
 
-**Phase 4 complete.** Execution runner: preflight checks (records CC
-version), patch instructions in opening prompts, patch verification
-(`PatchStatus` model), runbook generation (11 per-treatment runbooks
-in `docs/runbooks/`), execution config (`config/execution.yaml`).
+**Phase 5 complete.** Cumulative scoring mode added alongside existing
+isolated mode. Treatment 0a scored 97.5% in 30 min (ceiling effect) —
+isolated patch-and-reset protocol eliminates collaboration signal.
+Cumulative mode: agents work on same tree, no resets between features,
+combined patch scored against all 104 tests.
 
-204 unit tests + 104 acceptance tests = 308 total.
+Two scoring modes: `--mode isolated` (default, backward compatible) and
+`--mode cumulative`. Cumulative runbooks in `docs/runbooks-cumulative/`.
+
+238 unit tests + 104 acceptance tests = 342 total.
 
 ## Phases
 
@@ -99,6 +103,7 @@ in `docs/runbooks/`), execution config (`config/execution.yaml`).
 | 2 | `phase-2-execution-harness` | Complete |
 | 3 | `phase-3-scoring-framework` | Complete |
 | 4 | `phase-4-execution-runner` | Complete |
+| 5 | `phase-5-cumulative-scoring` | Complete |
 
 ## Acceptance Test Results (against pinned LangGraph)
 
@@ -147,7 +152,9 @@ All 104 tests fail against pinned commit. 0 passing. Uniform structure:
 - `TieredScore.composite(weights)` — weighted combination on the model
 - Collection pipeline: apply patch → pytest --junitxml → parse XML → revert → persist to `data/scores/`
 - Wave 2 decision: CV of mean composites across treatments; CV > threshold → recommend Wave 2
-- CLI: `ate-features score collect <tid>`, `ate-features score show [tid]`, `ate-features score decide-wave2`
+- Two modes: `--mode isolated` (default, per-feature patch/test/revert) and
+  `--mode cumulative` (apply cumulative.patch, run all 104 tests, extract per-feature)
+- CLI: `ate-features score collect <tid> [--mode cumulative]`, `ate-features score show [tid]`, `ate-features score decide-wave2`
 
 ## Known Gotchas
 

@@ -1,42 +1,88 @@
 # Runbook: Treatment 8 — Specialized + Encourage
 
+**Treatment**: 8 (Specialized + Encourage)
+**Description**: 1 interactive Claude Code session with Agent Teams. Team size: 4x2. Delegate mode ON. Vague prompts (titles + subsystems only). Communication: encourage.
+**Expected Duration**: 2-6 hours
+**Agent Teams**: ON (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude`)
+
 | Dimension | Value |
 |-----------|-------|
-| Decomposition | autonomous |
+| Decomposition | **Autonomous** |
 | Prompt specificity | vague |
 | Delegate mode | True |
 | Team size | 4x2 |
 | Communication | encourage |
 | Specialization | specialized |
 
-**Agent Teams:** ON
+---
 
-## Pre-session Setup
+## 1. Pre-Session Setup
+
+Run these commands from the ate-features repo root.
+
+### 1.1 Run preflight checks
 
 ```bash
-# 1. Run preflight (records CC version)
 ate-features exec preflight
-
-# 2. Scaffold session directories
-ate-features exec scaffold 8
-
-# 3. Create patches directory
-mkdir -p data/patches/treatment-8
-
-# 4. Record start time
-echo "Started: $(date -Iseconds)" >> data/transcripts/treatment-8/notes.md
 ```
 
-## Start Session
+- [ ] Preflight passed (LangGraph at correct pin, clean working tree)
+- [ ] CC version recorded: `___________`
+
+### 1.2 Scaffold session directories
+
+```bash
+ate-features exec scaffold 8
+```
+
+- [ ] `data/transcripts/treatment-8/` created
+- [ ] `session_guide.md`, `metadata.json`, `notes.md` present
+
+### 1.3 Create patches directory
+
+```bash
+mkdir -p data/patches/treatment-8
+```
+
+- [ ] `data/patches/treatment-8/` exists
+
+### 1.4 Verify LangGraph is clean
+
+```bash
+git -C data/langgraph status
+git -C data/langgraph diff --stat
+```
+
+- [ ] Working tree clean (no modifications, no untracked files)
+
+### 1.5 Record session start
+
+```bash
+date -u +"%Y-%m-%dT%H:%M:%SZ"
+```
+
+- [ ] Start time: `___________`
+
+---
+
+## 2. Opening Prompt
+
+Launch Claude Code:
 
 ```bash
 cd data/langgraph
 CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude
 ```
 
-### Opening Prompt
+- [ ] Confirmed: launched with `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 claude`
 
-```
+### 2.1 Paste the opening prompt
+
+Copy and paste the **entire block below** as a single message:
+
+---
+
+````
 # Feature Implementation Task
 
 Implement the following features in the LangGraph repository. Acceptance tests are in the `tests/acceptance/` directory.
@@ -52,53 +98,232 @@ Implement the following features in the LangGraph repository. Acceptance tests a
 
 ## Patch Instructions
 
-After implementing each feature, save the patch and reset:
+**CRITICAL:** After implementing **each** feature, save your patch by running `git diff > data/patches/treatment-8/<FN>.patch` (replacing `<FN>` with the feature ID, e.g., `F1`, `F2`, etc.), then reset with `git checkout . && git clean -fd` before moving to the next feature. If you cannot produce a fix for a feature, save an empty patch and move on.
+
+
+Remember: save each patch with `git diff > data/patches/treatment-8/<FN>.patch` and reset with `git checkout . && git clean -fd` before starting the next feature. Start with F1.
+````
+
+---
+
+- [ ] Pasted the full opening prompt
+- [ ] Agent acknowledged the features and began working
+
+---
+
+## 3. Monitoring Guidelines
+
+### 3.1 Cadence
+
+Glance at the session every **2-3 minutes**. You do not need to watch continuously, but check progress regularly to catch stalls early.
+
+### 3.2 What to watch for
+
+| Signal | Action |
+|--------|--------|
+| Agent making steady progress (reading, coding, testing) | No action needed |
+| Agent going in circles (re-reading same files, same approach) | Note time; prepare to nudge at threshold |
+| Agent asks a clarifying question | Answer promptly |
+| Agent forgot to save patch before next feature | Intervene immediately (see nudge examples) |
+| Agent forgot to reset (`git checkout . && git clean -fd`) | Intervene immediately |
+| Agent stuck on unrelated build/test errors | Nudge toward a different approach |
+| No output for >2 minutes | Check if waiting for input |
+| Lead forming team and delegating | Note the confirmation |
+
+### 3.3 Escape time thresholds
+
+Wall-clock time limit per feature: **~45 minutes**. If the agent has not produced a patch (or acknowledged it cannot) within the threshold, intervene.
+
+### 3.4 Nudge examples
+
+Use these as templates. Adapt to the situation.
+
+**If stuck on a feature past the threshold:**
 ```
-git diff > data/patches/treatment-8/<FN>.patch
+Let's move on. Save whatever patch you have (even if incomplete) with:
+git diff > data/patches/treatment-8/<feature-id>.patch
+Then reset with: git checkout . && git clean -fd
+And proceed to the next feature.
+```
+
+**If agent forgot to save a patch:**
+```
+Before moving on, please save the patch for the feature you just finished:
+git diff > data/patches/treatment-8/<feature-id>.patch
+Then reset: git checkout . && git clean -fd
+```
+
+**If agent forgot to reset LangGraph:**
+```
+Please reset the LangGraph source before starting the next feature:
 git checkout . && git clean -fd
-```
-Save a separate patch for EACH feature before resetting.
-
+Verify with: git diff --stat
 ```
 
-## Monitoring
+**If agent is going in circles:**
+```
+You seem to be revisiting the same approach. Can you try a different angle?
+If you're stuck, it's OK to save what you have and move on to the next feature.
+```
 
-**Escape threshold:** ~45 min per feature. If the agent is stuck for >10 min on a single approach, consider nudging.
+**If a specific agent is stuck (team treatments):**
+```
+Agent [N] seems stuck on [feature]. Can it try a different approach?
+```
 
-**Nudge templates:**
-- **Stuck:** "Have you considered looking at the test file for hints about the expected behavior?"
-- **Forgot patch:** "Please save a patch before moving on: `git diff > data/patches/treatment-{tid}/{FN}.patch`"
-- **Forgot reset:** "Please reset before the next feature: `git checkout . && git clean -fd`"
+### 3.5 Per-feature tracking
 
-## Post-session
+Use this table to track progress in real time (fill in as you go):
+
+| # | Feature | Subsystem | Started | Finished | Patch Saved | Reset Done | Notes |
+|---|---------|-----------|---------|----------|-------------|------------|-------|
+| 1 | F1 | serializer | ___:___ | ___:___ | [ ] | [ ] | |
+| 2 | F2 | serializer | ___:___ | ___:___ | [ ] | [ ] | |
+| 3 | F3 | serializer | ___:___ | ___:___ | [ ] | [ ] | |
+| 4 | F4 | serializer | ___:___ | ___:___ | [ ] | [ ] | |
+| 5 | F5 | state | ___:___ | ___:___ | [ ] | [ ] | |
+| 6 | F6 | state | ___:___ | ___:___ | [ ] | [ ] | |
+| 7 | F7 | streaming | ___:___ | ___:___ | [ ] | [ ] | |
+| 8 | F8 | streaming | ___:___ | ___:___ | [ ] | [ ] | |
+
+
+---
+
+## 4. After-Session Steps
+
+### 4.1 Record end timestamp
 
 ```bash
-# 1. Check for unsaved work
-cd data/langgraph && git diff --stat
-
-# 2. Verify patches
-ate-features exec verify-patches 8
-
-# 3. Record end time
-echo "Ended: $(date -Iseconds)" >> data/transcripts/treatment-8/notes.md
-
-# 4. Revert LangGraph to clean state
-cd data/langgraph && git checkout . && git clean -fd
+date -u +"%Y-%m-%dT%H:%M:%SZ"
 ```
 
-**Transcript location:** `~/.claude/projects/-Users-kartikganapathi-Documents-Personal-random_projects-others-projects-checkout-ate-features/`
+- [ ] End time: `___________`
+
+### 4.2 Check for unsaved work
+
+```bash
+git -C data/langgraph diff --stat
+```
+
+If there are uncommitted changes, save them as a remaining patch:
+
+```bash
+git -C data/langgraph diff > data/patches/treatment-8/remaining.patch
+git -C data/langgraph checkout . && git -C data/langgraph clean -fd
+```
+
+### 4.3 Verify patches
+
+```bash
+ate-features exec verify-patches 8
+ls -la data/patches/treatment-8/
+```
+
+Expected: up to 8 files (`F1.patch` through `F8.patch`). Some may be empty (0 bytes) if the agent could not implement that feature.
+
+- [ ] Verified patch files present
+- [ ] Non-empty patches: `___________`
+
+### 4.4 Verify LangGraph is clean
+
+```bash
+git -C data/langgraph status
+```
+
+- [ ] Working tree clean
+
+### 4.5 Update metadata.json
+
+Update `data/transcripts/treatment-8/metadata.json` with actual timing and outcome data:
+
+```json
+{
+  "started_at": "2026-XX-XXTXX:XX:XXZ",
+  "completed_at": "2026-XX-XXTXX:XX:XXZ",
+  "wall_clock_seconds": null,
+  "session_id": null,
+  "model": "claude-opus-4-6",
+  "notes": null
+}
+```
+
+- [ ] metadata.json updated
+
+### 4.6 Write session notes
+
+Record observations in `data/transcripts/treatment-8/notes.md`. Use this format:
+
+```markdown
+# Notes: Treatment 8 — Specialized + Encourage
+
+## Assignment Confirmation
+- Agent 1: F1, F5 (confirmed by lead)
+- Agent 2: F2, F6 (confirmed by lead)
+- Agent 3: F3, F7 (confirmed by lead)
+- Agent 4: F4, F8 (confirmed by lead)
+
+## Timeline
+- HH:MM Session started
+- HH:MM Agent began Feature F1
+- ...
+
+## Per-Feature Outcomes
+| Feature | Outcome | Time |
+|---------|---------|------|
+| F1 | fix/partial/stuck | ~X min |
+| ... | ... | ... |
+
+## Interventions
+- (timestamp): (what you said)
+
+## Inter-Agent Communication
+- (any SendMessage events between agents)
+
+## Observations
+- Notable behavior: (anything interesting)
+- Approximate tool calls: ~N
+```
+
+- [ ] Notes written
+
+### 4.7 Save session transcript
+
+Claude Code stores session transcripts as JSONL files at:
+
+```
+~/.claude/projects/-Users-kartikganapathi-Documents-Personal-random_projects-others-projects-checkout-ate-features/
+```
+
 Look for the most recent `.jsonl` file matching the session time.
 
-## Final Checklist
+- [ ] Session transcript located or session ID noted: `___________`
 
-- [ ] Preflight passed
-- [ ] Session scaffolded
-- [ ] Start time recorded
-- [ ] Opening prompt pasted
-- [ ] All features implemented
-- [ ] Patches saved (one per feature)
-- [ ] Patches verified
-- [ ] End time recorded
-- [ ] Transcript located
-- [ ] LangGraph reverted to clean state
-- [ ] Notes finalized
+---
+
+## 5. Final Checklist
+
+- [ ] Agent Teams env var was set
+- [ ] All 8 features were attempted
+- [ ] Patches saved for each feature (even if empty)
+- [ ] LangGraph was reset between features
+- [ ] LangGraph is clean after final feature
+- [ ] Per-feature timing recorded in monitoring table
+- [ ] metadata.json updated with actual data
+- [ ] Notes written with observations
+- [ ] Session transcript saved
+- [ ] Total wall-clock time: `___________`
+
+---
+
+## Appendix: Feature Quick Reference
+
+| # | ID | Title | Subsystem |
+|---|----|-------|-----------|
+| 1 | F1 | Pandas DataFrame/Series msgpack serialization | serializer |
+| 2 | F2 | Generic Pydantic v2 type round-trip in checkpoint serde | serializer |
+| 3 | F3 | StrEnum preservation in checkpoint serde | serializer |
+| 4 | F4 | Nested Enum deserialization fix | serializer |
+| 5 | F5 | Reducer metadata ordering dependency | state |
+| 6 | F6 | BinaryOperatorAggregate ignores default_factory | state |
+| 7 | F7 | Nested message detection in stream_mode=messages | streaming |
+| 8 | F8 | Input message dedup for nested structures | streaming |

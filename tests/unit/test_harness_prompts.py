@@ -197,3 +197,38 @@ class TestPatchInstructions:
         features = _get_features()
         prompt = get_opening_prompt(treatment, features)
         assert "treatment-1" in prompt
+
+
+class TestCumulativePatchInstructions:
+    def test_cumulative_has_git_add(self) -> None:
+        treatment = _get_treatment("0a")
+        features = _get_features()
+        prompt = get_opening_prompt(
+            treatment, features, scoring_mode="cumulative",
+        )
+        assert "git add -A" in prompt
+
+    def test_cumulative_no_reset(self) -> None:
+        treatment = _get_treatment("0a")
+        features = _get_features()
+        prompt = get_opening_prompt(
+            treatment, features, scoring_mode="cumulative",
+        )
+        assert "git checkout" not in prompt
+        assert "git clean" not in prompt
+
+    def test_cumulative_has_combined_patch(self) -> None:
+        treatment = _get_treatment("0a")
+        features = _get_features()
+        prompt = get_opening_prompt(
+            treatment, features, scoring_mode="cumulative",
+        )
+        assert "cumulative.patch" in prompt
+
+    def test_cumulative_has_treatment_id(self) -> None:
+        treatment = _get_treatment(1)
+        features = _get_features()
+        prompt = get_opening_prompt(
+            treatment, features, scoring_mode="cumulative",
+        )
+        assert "treatment-1" in prompt

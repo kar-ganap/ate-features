@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import glob
 import json
 import math
 import re
@@ -70,6 +71,70 @@ def _classify_tier(classname: str) -> str | None:
     return None
 
 
+def _extract_feature_id(classname: str) -> str | None:
+    """Extract feature ID from a test classname.
+
+    From 'tests.acceptance.test_f2_pydantic.TestT2EdgeCases' → 'F2'.
+    """
+    match = re.search(r"test_(f\d+)_", classname, re.IGNORECASE)
+    if match:
+        return match.group(1).upper()
+    return None
+
+
+def parse_junit_xml_cumulative(
+    xml_path: Path,
+    treatment_id: int | str,
+) -> list[TieredScore]:
+    """Parse a combined JUnit XML with tests from multiple features.
+
+    Groups testcases by feature ID (extracted from classname),
+    then computes per-feature TieredScores.
+    """
+    tree = ET.parse(xml_path)  # noqa: S314
+    root = tree.getroot()
+
+    # Group testcases by feature
+    by_feature: dict[str, list[ET.Element]] = {}
+    for testcase in root.iter("testcase"):
+        classname = testcase.get("classname", "")
+        fid = _extract_feature_id(classname)
+        if fid is None:
+            continue
+        by_feature.setdefault(fid, []).append(testcase)
+
+    scores: list[TieredScore] = []
+    for fid in sorted(by_feature.keys()):
+        tier_totals: dict[str, int] = {"t1": 0, "t2": 0, "t3": 0, "t4": 0}
+        tier_passed: dict[str, int] = {"t1": 0, "t2": 0, "t3": 0, "t4": 0}
+
+        for testcase in by_feature[fid]:
+            classname = testcase.get("classname", "")
+            tier = _classify_tier(classname)
+            if tier is None:
+                continue
+            tier_totals[tier] += 1
+            has_failure = testcase.find("failure") is not None
+            has_error = testcase.find("error") is not None
+            if not has_failure and not has_error:
+                tier_passed[tier] += 1
+
+        scores.append(TieredScore(
+            feature_id=fid,
+            treatment_id=treatment_id,
+            t1_passed=tier_passed["t1"],
+            t1_total=tier_totals["t1"],
+            t2_passed=tier_passed["t2"],
+            t2_total=tier_totals["t2"],
+            t3_passed=tier_passed["t3"],
+            t3_total=tier_totals["t3"],
+            t4_passed=tier_passed["t4"],
+            t4_total=tier_totals["t4"],
+        ))
+
+    return scores
+
+
 # --- Persistence ---
 
 _DEFAULT_DATA_DIR = Path(__file__).parent.parent.parent / "data"
@@ -133,26 +198,45 @@ def collect_scores(
     treatment_id: int | str,
     langgraph_dir: Path,
     *,
+    mode: str = "isolated",
     data_dir: Path = _DEFAULT_DATA_DIR,
+    project_root: Path | None = None,
 ) -> list[TieredScore]:
     """Collect scores by applying patches, running tests, and parsing results.
 
-    For each feature with a patch file:
-    1. Apply the patch to langgraph_dir
-    2. Run pytest with --junitxml
-    3. Parse the XML into a TieredScore
-    4. Revert langgraph_dir
+    Modes:
+    - isolated: Apply each feature patch individually, run per-feature tests, revert.
+    - cumulative: Apply cumulative.patch, run all tests once, extract per-feature.
 
     Persists results to data/scores/treatment-{id}.json.
-    Returns list of TieredScores (one per feature with a patch).
     """
+    if mode == "cumulative":
+        return collect_scores_cumulative(
+            treatment_id, langgraph_dir,
+            data_dir=data_dir, project_root=project_root,
+        )
+
     patch_dir = data_dir / "patches" / f"treatment-{treatment_id}"
     if not patch_dir.exists():
         return []
 
+    # Acceptance tests live in the ate-features project, not in langgraph
+    root = project_root or _DEFAULT_DATA_DIR.parent
+    test_dir = root / "tests" / "acceptance"
+
     scores: list[TieredScore] = []
     for patch_path in sorted(patch_dir.glob("*.patch")):
         feature_id = patch_path.stem
+
+        # Skip non-feature patches (e.g. remaining.patch)
+        if not feature_id.upper().startswith("F"):
+            continue
+
+        # Resolve test files via glob (shell doesn't expand in subprocess)
+        pattern = str(test_dir / f"test_{feature_id.lower()}_*.py")
+        test_files = sorted(glob.glob(pattern))
+        if not test_files:
+            continue
 
         # Apply patch (--check first)
         check = subprocess.run(
@@ -170,18 +254,18 @@ def collect_scores(
         )
 
         try:
-            # Run pytest with junitxml output
+            # Run pytest from project root with absolute test paths
             xml_path = data_dir / "scores" / "tmp" / f"{feature_id}.xml"
             xml_path.parent.mkdir(parents=True, exist_ok=True)
 
             subprocess.run(
                 [
                     "pytest",
-                    f"tests/acceptance/test_{feature_id.lower()}_*.py",
+                    *test_files,
                     f"--junitxml={xml_path}",
                     "-q",
                 ],
-                cwd=langgraph_dir,
+                cwd=root,
                 capture_output=True,
             )
 
@@ -200,6 +284,84 @@ def collect_scores(
                 cwd=langgraph_dir,
                 capture_output=True,
             )
+
+    if scores:
+        save_scores(scores, treatment_id, data_dir=data_dir)
+
+    return scores
+
+
+def collect_scores_cumulative(
+    treatment_id: int | str,
+    langgraph_dir: Path,
+    *,
+    data_dir: Path = _DEFAULT_DATA_DIR,
+    project_root: Path | None = None,
+) -> list[TieredScore]:
+    """Collect scores by applying cumulative patch and running all tests.
+
+    1. Apply cumulative.patch to langgraph_dir
+    2. Run all acceptance tests with --junitxml
+    3. Parse combined XML into per-feature TieredScores
+    4. Revert langgraph_dir
+
+    Persists results to data/scores/treatment-{id}.json.
+    """
+    patch_dir = data_dir / "patches" / f"treatment-{treatment_id}"
+    cumulative_patch = patch_dir / "cumulative.patch"
+    if not cumulative_patch.exists():
+        return []
+
+    root = project_root or _DEFAULT_DATA_DIR.parent
+    test_dir = root / "tests" / "acceptance"
+    test_files = sorted(glob.glob(str(test_dir / "test_f*_*.py")))
+    if not test_files:
+        return []
+
+    # Apply cumulative patch (--check first)
+    check = subprocess.run(
+        ["git", "apply", "--check", str(cumulative_patch)],
+        cwd=langgraph_dir,
+        capture_output=True,
+    )
+    if check.returncode != 0:
+        return []
+
+    subprocess.run(
+        ["git", "apply", str(cumulative_patch)],
+        cwd=langgraph_dir,
+        capture_output=True,
+    )
+
+    try:
+        xml_path = data_dir / "scores" / "tmp" / "cumulative.xml"
+        xml_path.parent.mkdir(parents=True, exist_ok=True)
+
+        subprocess.run(
+            [
+                "pytest",
+                *test_files,
+                f"--junitxml={xml_path}",
+                "-q",
+            ],
+            cwd=root,
+            capture_output=True,
+        )
+
+        scores: list[TieredScore] = []
+        if xml_path.exists():
+            scores = parse_junit_xml_cumulative(xml_path, treatment_id)
+    finally:
+        subprocess.run(
+            ["git", "checkout", "."],
+            cwd=langgraph_dir,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "clean", "-fd"],
+            cwd=langgraph_dir,
+            capture_output=True,
+        )
 
     if scores:
         save_scores(scores, treatment_id, data_dir=data_dir)

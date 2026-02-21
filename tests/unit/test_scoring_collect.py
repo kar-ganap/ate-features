@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from ate_features.models import TieredScore
-from ate_features.scoring import collect_scores
+from ate_features.scoring import collect_scores, collect_scores_cumulative
 
 SAMPLE_XML = """\
 <?xml version="1.0" encoding="utf-8"?>
@@ -178,3 +178,134 @@ class TestCollectScores:
 
         scores = collect_scores("0a", langgraph_dir, data_dir=data_dir)
         assert scores == []
+
+
+CUMULATIVE_XML = """\
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+  <testsuite name="pytest" tests="4">
+    <testcase classname="tests.acceptance.test_f1_serde.TestT1Basic" name="a"/>
+    <testcase classname="tests.acceptance.test_f1_serde.TestT2EdgeCases" name="b"/>
+    <testcase classname="tests.acceptance.test_f2_pydantic.TestT1Basic" name="c"/>
+    <testcase classname="tests.acceptance.test_f2_pydantic.TestT2EdgeCases" name="d">
+      <failure>fail</failure>
+    </testcase>
+  </testsuite>
+</testsuites>
+"""
+
+
+@pytest.fixture()
+def cumulative_dirs(tmp_path: Path) -> tuple[Path, Path]:
+    """Create dirs with a cumulative.patch."""
+    langgraph_dir = tmp_path / "langgraph"
+    langgraph_dir.mkdir()
+    data_dir = tmp_path / "data"
+    patch_dir = data_dir / "patches" / "treatment-0a"
+    patch_dir.mkdir(parents=True)
+    (patch_dir / "cumulative.patch").write_text("fake combined patch")
+    return langgraph_dir, data_dir
+
+
+class TestCollectScoresCumulative:
+    def test_applies_cumulative_patch_and_runs_all_tests(
+        self, cumulative_dirs: tuple[Path, Path]
+    ) -> None:
+        langgraph_dir, data_dir = cumulative_dirs
+        apply_calls: list[list[str]] = []
+
+        def fake_run(args: list[str], **kwargs: object) -> MagicMock:
+            result = MagicMock()
+            result.returncode = 0
+            if args[:2] == ["git", "apply"]:
+                apply_calls.append(args)
+            if args and args[0] == "pytest":
+                for arg in args:
+                    if arg.startswith("--junitxml="):
+                        xml_path = Path(arg.split("=", 1)[1])
+                        xml_path.parent.mkdir(parents=True, exist_ok=True)
+                        xml_path.write_text(CUMULATIVE_XML)
+                        break
+            return result
+
+        with patch("ate_features.scoring.subprocess.run", side_effect=fake_run):
+            scores = collect_scores_cumulative(
+                "0a", langgraph_dir, data_dir=data_dir
+            )
+
+        # Should apply cumulative.patch (check + apply = 2 calls)
+        assert len(apply_calls) == 2
+        assert any("cumulative.patch" in str(a) for a in apply_calls)
+        # Should return per-feature scores
+        assert len(scores) == 2
+        fids = {s.feature_id for s in scores}
+        assert fids == {"F1", "F2"}
+
+    def test_reverts_once_at_end(
+        self, cumulative_dirs: tuple[Path, Path]
+    ) -> None:
+        langgraph_dir, data_dir = cumulative_dirs
+        revert_calls: list[list[str]] = []
+
+        def fake_run(args: list[str], **kwargs: object) -> MagicMock:
+            result = MagicMock()
+            result.returncode = 0
+            if args[:2] == ["git", "checkout"]:
+                revert_calls.append(args)
+            if args and args[0] == "pytest":
+                for arg in args:
+                    if arg.startswith("--junitxml="):
+                        xml_path = Path(arg.split("=", 1)[1])
+                        xml_path.parent.mkdir(parents=True, exist_ok=True)
+                        xml_path.write_text(CUMULATIVE_XML)
+                        break
+            return result
+
+        with patch("ate_features.scoring.subprocess.run", side_effect=fake_run):
+            collect_scores_cumulative(
+                "0a", langgraph_dir, data_dir=data_dir
+            )
+
+        # Only ONE revert at end, not per-feature
+        assert len(revert_calls) == 1
+
+    def test_no_cumulative_patch_returns_empty(
+        self, tmp_path: Path
+    ) -> None:
+        langgraph_dir = tmp_path / "langgraph"
+        langgraph_dir.mkdir()
+        data_dir = tmp_path / "data"
+        patch_dir = data_dir / "patches" / "treatment-0a"
+        patch_dir.mkdir(parents=True)
+        # No cumulative.patch — only per-feature patches
+        (patch_dir / "F1.patch").write_text("feature patch")
+
+        scores = collect_scores_cumulative(
+            "0a", langgraph_dir, data_dir=data_dir
+        )
+        assert scores == []
+
+    def test_mode_dispatch_cumulative(
+        self, cumulative_dirs: tuple[Path, Path]
+    ) -> None:
+        langgraph_dir, data_dir = cumulative_dirs
+
+        def fake_run(args: list[str], **kwargs: object) -> MagicMock:
+            result = MagicMock()
+            result.returncode = 0
+            if args and args[0] == "pytest":
+                for arg in args:
+                    if arg.startswith("--junitxml="):
+                        xml_path = Path(arg.split("=", 1)[1])
+                        xml_path.parent.mkdir(parents=True, exist_ok=True)
+                        xml_path.write_text(CUMULATIVE_XML)
+                        break
+            return result
+
+        with patch("ate_features.scoring.subprocess.run", side_effect=fake_run):
+            scores = collect_scores(
+                "0a", langgraph_dir,
+                data_dir=data_dir, mode="cumulative",
+            )
+
+        assert len(scores) == 2
