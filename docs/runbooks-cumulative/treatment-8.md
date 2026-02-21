@@ -96,6 +96,14 @@ Implement the following features in the LangGraph repository. Acceptance tests a
 - **Nested message detection in stream_mode=messages** (streaming)
 - **Input message dedup for nested structures** (streaming)
 
+## Team Setup
+
+**Create an agent team** to implement these features in parallel. Spawn one teammate per agent assignment above (4x2). Each teammate should work on their assigned features independently.
+
+Assign each teammate their features from the Feature Assignments section. Teammates can communicate with each other if they need to coordinate on shared files.
+
+Wait for all teammates to complete their tasks before creating the final combined patch.
+
 ## Patch Instructions
 
 **CRITICAL:** Implement all assigned features. When **all** features are complete, save the combined patch:

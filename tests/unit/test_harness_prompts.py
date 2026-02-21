@@ -266,6 +266,38 @@ class TestCumulativePatchInstructions:
         )
         assert "git add -A" not in prompt
 
+    def test_cumulative_at_has_team_creation_instruction(self) -> None:
+        """AT treatments should explicitly instruct team creation."""
+        treatment = _get_treatment(1)
+        features = _get_features()
+        config = load_treatments()
+        prompt = get_opening_prompt(
+            treatment, features, scoring_mode="cumulative",
+            assignments=config.feature_assignments.explicit,
+        )
+        assert "agent team" in prompt.lower() or "create a team" in prompt.lower()
+
+    def test_cumulative_at_has_teammate_spawning(self) -> None:
+        """AT treatments should tell the lead to spawn teammates."""
+        treatment = _get_treatment(1)
+        features = _get_features()
+        config = load_treatments()
+        prompt = get_opening_prompt(
+            treatment, features, scoring_mode="cumulative",
+            assignments=config.feature_assignments.explicit,
+        )
+        assert "teammate" in prompt.lower() or "spawn" in prompt.lower()
+
+    def test_cumulative_solo_no_team_instruction(self) -> None:
+        """Solo treatments should NOT mention team creation."""
+        treatment = _get_treatment("0a")
+        features = _get_features()
+        prompt = get_opening_prompt(
+            treatment, features, scoring_mode="cumulative",
+        )
+        assert "agent team" not in prompt.lower()
+        assert "spawn" not in prompt.lower()
+
     def test_cumulative_solo_has_same_tree_constraint(self) -> None:
         """Solo treatments (0a) should still say 'same working tree'."""
         treatment = _get_treatment("0a")

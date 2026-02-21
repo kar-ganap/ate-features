@@ -174,6 +174,10 @@ def get_opening_prompt(
     else:
         parts.append(_vague_prompt(features))
 
+    # Agent Teams: explicit team creation instruction
+    if uses_agent_teams(treatment) and scoring_mode == "cumulative":
+        parts.append(_team_creation_instruction(treatment, assignments))
+
     # Patch instructions
     if include_patch_instructions:
         if scoring_mode == "cumulative":
@@ -218,6 +222,35 @@ def _detailed_prompt(
             lines.append(f"- **Agent {agent_num}:** {', '.join(feats)}")
         lines.append("")
 
+    return "\n".join(lines)
+
+
+def _team_creation_instruction(
+    treatment: Treatment,
+    assignments: FeatureAssignment | None,
+) -> str:
+    """Generate explicit instruction for the lead to create an agent team."""
+    ts = treatment.dimensions.team_size
+    lines: list[str] = []
+    lines.append("## Team Setup\n")
+    lines.append(
+        f"**Create an agent team** to implement these features in parallel. "
+        f"Spawn one teammate per agent assignment above ({ts}). "
+        f"Each teammate should work on their assigned features independently."
+    )
+    lines.append("")
+    if assignments:
+        lines.append(
+            "Assign each teammate their features from the Feature Assignments "
+            "section. Teammates can communicate with each other if they need "
+            "to coordinate on shared files."
+        )
+        lines.append("")
+    lines.append(
+        "Wait for all teammates to complete their tasks before creating "
+        "the final combined patch."
+    )
+    lines.append("")
     return "\n".join(lines)
 
 

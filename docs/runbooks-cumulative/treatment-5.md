@@ -191,6 +191,14 @@ structures for message IDs.
 - **Agent 3:** F3, F7
 - **Agent 4:** F4, F8
 
+## Team Setup
+
+**Create an agent team** to implement these features in parallel. Spawn one teammate per agent assignment above (8x1). Each teammate should work on their assigned features independently.
+
+Assign each teammate their features from the Feature Assignments section. Teammates can communicate with each other if they need to coordinate on shared files.
+
+Wait for all teammates to complete their tasks before creating the final combined patch.
+
 ## Patch Instructions
 
 **CRITICAL:** Implement all assigned features. When **all** features are complete, save the combined patch:
