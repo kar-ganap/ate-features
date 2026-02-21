@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import glob
 import json
 import math
 import re
@@ -134,12 +135,13 @@ def collect_scores(
     langgraph_dir: Path,
     *,
     data_dir: Path = _DEFAULT_DATA_DIR,
+    project_root: Path | None = None,
 ) -> list[TieredScore]:
     """Collect scores by applying patches, running tests, and parsing results.
 
     For each feature with a patch file:
     1. Apply the patch to langgraph_dir
-    2. Run pytest with --junitxml
+    2. Run pytest with --junitxml (from project root)
     3. Parse the XML into a TieredScore
     4. Revert langgraph_dir
 
@@ -150,9 +152,23 @@ def collect_scores(
     if not patch_dir.exists():
         return []
 
+    # Acceptance tests live in the ate-features project, not in langgraph
+    root = project_root or _DEFAULT_DATA_DIR.parent
+    test_dir = root / "tests" / "acceptance"
+
     scores: list[TieredScore] = []
     for patch_path in sorted(patch_dir.glob("*.patch")):
         feature_id = patch_path.stem
+
+        # Skip non-feature patches (e.g. remaining.patch)
+        if not feature_id.upper().startswith("F"):
+            continue
+
+        # Resolve test files via glob (shell doesn't expand in subprocess)
+        pattern = str(test_dir / f"test_{feature_id.lower()}_*.py")
+        test_files = sorted(glob.glob(pattern))
+        if not test_files:
+            continue
 
         # Apply patch (--check first)
         check = subprocess.run(
@@ -170,18 +186,18 @@ def collect_scores(
         )
 
         try:
-            # Run pytest with junitxml output
+            # Run pytest from project root with absolute test paths
             xml_path = data_dir / "scores" / "tmp" / f"{feature_id}.xml"
             xml_path.parent.mkdir(parents=True, exist_ok=True)
 
             subprocess.run(
                 [
                     "pytest",
-                    f"tests/acceptance/test_{feature_id.lower()}_*.py",
+                    *test_files,
                     f"--junitxml={xml_path}",
                     "-q",
                 ],
-                cwd=langgraph_dir,
+                cwd=root,
                 capture_output=True,
             )
 
