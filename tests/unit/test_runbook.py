@@ -253,3 +253,38 @@ class TestSaveRunbooks:
         runbooks = {"0a": "# Hello World"}
         paths = save_runbooks(runbooks, tmp_path)
         assert paths[0].read_text() == "# Hello World"
+
+
+class TestCumulativeRunbook:
+    def test_cumulative_has_no_reset_nudges(self) -> None:
+        treatment = _get_treatment("0a")
+        features = _get_features()
+        runbook = generate_runbook(
+            treatment, features, scoring_mode="cumulative",
+        )
+        assert "git checkout" not in runbook
+        assert "git clean" not in runbook
+
+    def test_cumulative_has_git_add_in_prompt(self) -> None:
+        treatment = _get_treatment("0a")
+        features = _get_features()
+        runbook = generate_runbook(
+            treatment, features, scoring_mode="cumulative",
+        )
+        assert "git add -A" in runbook
+
+    def test_cumulative_has_cumulative_patch_in_post_session(self) -> None:
+        treatment = _get_treatment("0a")
+        features = _get_features()
+        runbook = generate_runbook(
+            treatment, features, scoring_mode="cumulative",
+        )
+        assert "cumulative.patch" in runbook
+
+    def test_cumulative_no_per_feature_reset_signals(self) -> None:
+        treatment = _get_treatment("0a")
+        features = _get_features()
+        runbook = generate_runbook(
+            treatment, features, scoring_mode="cumulative",
+        )
+        assert "forgot to reset" not in runbook

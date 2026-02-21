@@ -76,7 +76,9 @@ def _dimensions_table(treatment: Treatment) -> str:
     return "\n".join(lines)
 
 
-def _signal_action_table(treatment: Treatment) -> str:
+def _signal_action_table(
+    treatment: Treatment, scoring_mode: str = "isolated",
+) -> str:
     """Generate the signal/action monitoring table."""
     at = uses_agent_teams(treatment)
     lines = [
@@ -90,13 +92,23 @@ def _signal_action_table(treatment: Treatment) -> str:
         "| Answer promptly |",
         "| Agent forgot to save patch before next feature "
         "| Intervene immediately (see nudge examples) |",
-        "| Agent forgot to reset (`git checkout . && git clean -fd`) "
-        "| Intervene immediately |",
+    ]
+    if scoring_mode == "isolated":
+        lines.append(
+            "| Agent forgot to reset (`git checkout . && git clean -fd`) "
+            "| Intervene immediately |"
+        )
+    lines.extend([
         "| Agent stuck on unrelated build/test errors "
         "| Nudge toward a different approach |",
         "| No output for >2 minutes "
         "| Check if waiting for input |",
-    ]
+    ])
+    if scoring_mode == "cumulative":
+        lines.append(
+            "| Agent completed all features but not yet saved final patch "
+            "| Remind to save cumulative.patch |"
+        )
     if at:
         lines.append(
             "| Lead forming team and delegating "
@@ -121,47 +133,73 @@ def _per_feature_tracking_table(features: list[Feature]) -> str:
     return "\n".join(lines)
 
 
-def _nudge_templates(treatment: Treatment) -> str:
+def _nudge_templates(
+    treatment: Treatment, scoring_mode: str = "isolated",
+) -> str:
     """Generate nudge template examples."""
     tid = treatment.id
     at = uses_agent_teams(treatment)
     lines: list[str] = ["### 3.4 Nudge examples\n"]
     lines.append("Use these as templates. Adapt to the situation.\n")
 
-    lines.append("**If stuck on a feature past the threshold:**")
-    lines.append("```")
-    lines.append("Let's move on. Save whatever patch you have "
-                 "(even if incomplete) with:")
-    lines.append(f"git diff > data/patches/treatment-{tid}/"
-                 "<feature-id>.patch")
-    lines.append("Then reset with: git checkout . && git clean -fd")
-    lines.append("And proceed to the next feature.")
-    lines.append("```\n")
+    if scoring_mode == "cumulative":
+        lines.append("**If stuck on a feature past the threshold:**")
+        lines.append("```")
+        lines.append("Let's move on to the next feature. "
+                     "You'll save a final combined patch at the end.")
+        lines.append("```\n")
 
-    lines.append("**If agent forgot to save a patch:**")
-    lines.append("```")
-    lines.append("Before moving on, please save the patch for the feature "
-                 "you just finished:")
-    lines.append(f"git diff > data/patches/treatment-{tid}/"
-                 "<feature-id>.patch")
-    lines.append("Then reset: git checkout . && git clean -fd")
-    lines.append("```\n")
+        lines.append(
+            "**If agent completed all features but forgot patch:**"
+        )
+        lines.append("```")
+        lines.append("Great! Now save your combined patch with:")
+        lines.append(f"git diff --staged > data/patches/treatment-{tid}/"
+                     "cumulative.patch")
+        lines.append("```\n")
 
-    lines.append("**If agent forgot to reset LangGraph:**")
-    lines.append("```")
-    lines.append("Please reset the LangGraph source before starting "
-                 "the next feature:")
-    lines.append("git checkout . && git clean -fd")
-    lines.append("Verify with: git diff --stat")
-    lines.append("```\n")
+        lines.append("**If agent is going in circles:**")
+        lines.append("```")
+        lines.append("You seem to be revisiting the same approach. "
+                     "Can you try a different angle?")
+        lines.append("If you're stuck, it's OK to move on to the "
+                     "next feature.")
+        lines.append("```")
+    else:
+        lines.append("**If stuck on a feature past the threshold:**")
+        lines.append("```")
+        lines.append("Let's move on. Save whatever patch you have "
+                     "(even if incomplete) with:")
+        lines.append(f"git diff > data/patches/treatment-{tid}/"
+                     "<feature-id>.patch")
+        lines.append("Then reset with: git checkout . && git clean -fd")
+        lines.append("And proceed to the next feature.")
+        lines.append("```\n")
 
-    lines.append("**If agent is going in circles:**")
-    lines.append("```")
-    lines.append("You seem to be revisiting the same approach. "
-                 "Can you try a different angle?")
-    lines.append("If you're stuck, it's OK to save what you have "
-                 "and move on to the next feature.")
-    lines.append("```")
+        lines.append("**If agent forgot to save a patch:**")
+        lines.append("```")
+        lines.append("Before moving on, please save the patch for the "
+                     "feature you just finished:")
+        lines.append(f"git diff > data/patches/treatment-{tid}/"
+                     "<feature-id>.patch")
+        lines.append("Then reset: git checkout . && git clean -fd")
+        lines.append("```\n")
+
+        lines.append("**If agent forgot to reset LangGraph:**")
+        lines.append("```")
+        lines.append("Please reset the LangGraph source before starting "
+                     "the next feature:")
+        lines.append("git checkout . && git clean -fd")
+        lines.append("Verify with: git diff --stat")
+        lines.append("```\n")
+
+        lines.append("**If agent is going in circles:**")
+        lines.append("```")
+        lines.append("You seem to be revisiting the same approach. "
+                     "Can you try a different angle?")
+        lines.append("If you're stuck, it's OK to save what you have "
+                     "and move on to the next feature.")
+        lines.append("```")
 
     if at:
         lines.append("")
@@ -250,6 +288,7 @@ def generate_runbook(
     assignments: FeatureAssignment | None = None,
     specialization_context: str | None = None,
     communication_nudge: str | None = None,
+    scoring_mode: str = "isolated",
 ) -> str:
     """Generate a complete markdown runbook for a treatment."""
     exec_config = load_execution_config()
@@ -355,6 +394,7 @@ def generate_runbook(
                 assignments=assignments,
                 specialization_context=specialization_context,
                 communication_nudge=communication_nudge,
+                scoring_mode=scoring_mode,
             )
             sections.append("Paste the following prompt:\n")
             sections.append("````")
@@ -394,6 +434,7 @@ def generate_runbook(
             assignments=assignments,
             specialization_context=specialization_context,
             communication_nudge=communication_nudge,
+            scoring_mode=scoring_mode,
         )
         sections.append("````")
         sections.append(prompt)
@@ -416,7 +457,7 @@ def generate_runbook(
     )
 
     sections.append("### 3.2 What to watch for\n")
-    sections.append(_signal_action_table(treatment))
+    sections.append(_signal_action_table(treatment, scoring_mode))
     sections.append("")
 
     sections.append("### 3.3 Escape time thresholds\n")
@@ -426,7 +467,7 @@ def generate_runbook(
         "within the threshold, intervene.\n"
     )
 
-    sections.append(_nudge_templates(treatment))
+    sections.append(_nudge_templates(treatment, scoring_mode))
 
     if not per_feature:
         sections.append("### 3.5 Per-feature tracking\n")
@@ -452,33 +493,57 @@ def generate_runbook(
     sections.append("```bash")
     sections.append("git -C data/langgraph diff --stat")
     sections.append("```\n")
-    sections.append(
-        "If there are uncommitted changes, save them as a remaining patch:\n"
-    )
-    sections.append("```bash")
-    sections.append(
-        f"git -C data/langgraph diff > "
-        f"data/patches/treatment-{tid}/remaining.patch"
-    )
-    sections.append("git -C data/langgraph checkout . && "
-                    "git -C data/langgraph clean -fd")
-    sections.append("```\n")
+
+    if scoring_mode == "cumulative":
+        sections.append(
+            "If the agent did not save the final combined patch, "
+            "save it now:\n"
+        )
+        sections.append("```bash")
+        sections.append(
+            f"git -C data/langgraph diff > "
+            f"data/patches/treatment-{tid}/cumulative.patch"
+        )
+        sections.append("```\n")
+    else:
+        sections.append(
+            "If there are uncommitted changes, save them as a "
+            "remaining patch:\n"
+        )
+        sections.append("```bash")
+        sections.append(
+            f"git -C data/langgraph diff > "
+            f"data/patches/treatment-{tid}/remaining.patch"
+        )
+        sections.append("git -C data/langgraph checkout . && "
+                        "git -C data/langgraph clean -fd")
+        sections.append("```\n")
 
     sections.append("### 4.3 Verify patches\n")
     sections.append("```bash")
     sections.append(f"ate-features exec verify-patches {tid}")
     sections.append(f"ls -la data/patches/treatment-{tid}/")
     sections.append("```\n")
-    sections.append(
-        "Expected: up to 8 files (`F1.patch` through `F8.patch`). "
-        "Some may be empty (0 bytes) if the agent could not implement "
-        "that feature.\n"
-    )
+
+    if scoring_mode == "cumulative":
+        sections.append(
+            "Expected: `cumulative.patch` (combined result) plus "
+            "per-feature snapshots (`F1.patch` through `F8.patch`).\n"
+        )
+    else:
+        sections.append(
+            "Expected: up to 8 files (`F1.patch` through `F8.patch`). "
+            "Some may be empty (0 bytes) if the agent could not implement "
+            "that feature.\n"
+        )
     sections.append("- [ ] Verified patch files present")
     sections.append("- [ ] Non-empty patches: `___________`\n")
 
     sections.append("### 4.4 Verify LangGraph is clean\n")
     sections.append("```bash")
+    if scoring_mode == "cumulative":
+        sections.append("git -C data/langgraph checkout . && "
+                        "git -C data/langgraph clean -fd")
     sections.append("git -C data/langgraph status")
     sections.append("```\n")
     sections.append("- [ ] Working tree clean\n")
@@ -527,8 +592,14 @@ def generate_runbook(
     )
     sections.append(f"- [ ] {at_check}")
     sections.append("- [ ] All 8 features were attempted")
-    sections.append("- [ ] Patches saved for each feature (even if empty)")
-    sections.append("- [ ] LangGraph was reset between features")
+    if scoring_mode == "cumulative":
+        sections.append("- [ ] Per-feature snapshots saved")
+        sections.append("- [ ] cumulative.patch saved (combined result)")
+    else:
+        sections.append(
+            "- [ ] Patches saved for each feature (even if empty)"
+        )
+        sections.append("- [ ] LangGraph was reset between features")
     sections.append("- [ ] LangGraph is clean after final feature")
     sections.append("- [ ] Per-feature timing recorded in monitoring table")
     sections.append("- [ ] metadata.json updated with actual data")
@@ -545,7 +616,9 @@ def generate_runbook(
     return "\n".join(sections)
 
 
-def generate_all_runbooks() -> dict[int | str, str]:
+def generate_all_runbooks(
+    *, scoring_mode: str = "isolated",
+) -> dict[int | str, str]:
     """Generate runbooks for all 11 treatments."""
     config = load_treatments()
     features = load_features().features
@@ -557,6 +630,7 @@ def generate_all_runbooks() -> dict[int | str, str]:
             treatment,
             features,
             assignments=assignments,
+            scoring_mode=scoring_mode,
         )
     return runbooks
 
