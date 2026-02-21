@@ -531,7 +531,11 @@ def generate_runbook(
     sections.append(f"ls -la data/patches/treatment-{tid}/")
     sections.append("```\n")
 
-    if scoring_mode == "cumulative":
+    if scoring_mode == "cumulative" and at:
+        sections.append(
+            "Expected: `cumulative.patch` (combined result from all agents).\n"
+        )
+    elif scoring_mode == "cumulative":
         sections.append(
             "Expected: `cumulative.patch` (combined result) plus "
             "per-feature snapshots (`F1.patch` through `F8.patch`).\n"

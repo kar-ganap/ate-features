@@ -366,3 +366,28 @@ class TestCumulativeRunbook:
         assert "Communication guidance" in runbooks["2a"]
         # Treatment 1 is neutral (no nudge text)
         assert "Communication guidance" not in runbooks[1]
+
+    def test_cumulative_at_verify_expects_only_cumulative_patch(self) -> None:
+        """AT cumulative runbooks should expect only cumulative.patch, not F1-F8."""
+        treatment = _get_treatment(1)
+        features = _get_features()
+        config = load_treatments()
+        runbook = generate_runbook(
+            treatment, features,
+            assignments=config.feature_assignments.explicit,
+            scoring_mode="cumulative",
+        )
+        verify_section = runbook[runbook.index("Verify patches"):]
+        assert "cumulative.patch" in verify_section
+        assert "F1.patch" not in verify_section
+
+    def test_cumulative_solo_verify_expects_per_feature_snapshots(self) -> None:
+        """Solo cumulative runbooks should expect both cumulative and F1-F8."""
+        treatment = _get_treatment("0a")
+        features = _get_features()
+        runbook = generate_runbook(
+            treatment, features, scoring_mode="cumulative",
+        )
+        verify_section = runbook[runbook.index("Verify patches"):]
+        assert "cumulative.patch" in verify_section
+        assert "F1.patch" in verify_section

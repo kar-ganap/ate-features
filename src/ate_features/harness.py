@@ -262,6 +262,13 @@ def _team_creation_instruction(
         )
     lines.append("")
     lines.append(
+        "**IMPORTANT:** You MUST delegate all feature implementation to your "
+        "teammates. Do NOT implement any features yourself. Your role is to "
+        "coordinate: spawn the team, assign work, monitor progress, and save "
+        "the final combined patch."
+    )
+    lines.append("")
+    lines.append(
         "Wait for all teammates to complete their tasks before creating "
         "the final combined patch."
     )

@@ -366,3 +366,34 @@ class TestCumulativePatchInstructions:
             treatment, features, scoring_mode="cumulative",
         )
         assert "F1.patch" in prompt
+
+    def test_cumulative_at_mandatory_delegation(self) -> None:
+        """AT treatments should mandate delegation — lead must NOT implement."""
+        treatment = _get_treatment(1)
+        features = _get_features()
+        config = load_treatments()
+        prompt = get_opening_prompt(
+            treatment, features, scoring_mode="cumulative",
+            assignments=config.feature_assignments.explicit,
+        )
+        assert "must" in prompt.lower() or "do not implement" in prompt.lower()
+
+    def test_cumulative_8x1_mandatory_delegation(self) -> None:
+        """8x1 AT treatment should mandate delegation."""
+        treatment = _get_treatment(5)
+        features = _get_features()
+        config = load_treatments()
+        prompt = get_opening_prompt(
+            treatment, features, scoring_mode="cumulative",
+            assignments=config.feature_assignments.explicit,
+        )
+        assert "do not implement" in prompt.lower()
+
+    def test_cumulative_solo_no_delegation_language(self) -> None:
+        """Solo treatments should NOT have delegation mandate."""
+        treatment = _get_treatment("0a")
+        features = _get_features()
+        prompt = get_opening_prompt(
+            treatment, features, scoring_mode="cumulative",
+        )
+        assert "do not implement" not in prompt.lower()

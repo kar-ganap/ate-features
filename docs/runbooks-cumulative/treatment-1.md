@@ -197,6 +197,8 @@ structures for message IDs.
 
 Assign each teammate their features from the Feature Assignments section. Teammates can communicate with each other if they need to coordinate on shared files.
 
+**IMPORTANT:** You MUST delegate all feature implementation to your teammates. Do NOT implement any features yourself. Your role is to coordinate: spawn the team, assign work, monitor progress, and save the final combined patch.
+
 Wait for all teammates to complete their tasks before creating the final combined patch.
 
 ## Patch Instructions
@@ -311,7 +313,7 @@ ate-features exec verify-patches 1
 ls -la data/patches/treatment-1/
 ```
 
-Expected: `cumulative.patch` (combined result) plus per-feature snapshots (`F1.patch` through `F8.patch`).
+Expected: `cumulative.patch` (combined result from all agents).
 
 - [ ] Verified patch files present
 - [ ] Non-empty patches: `___________`

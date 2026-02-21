@@ -170,7 +170,9 @@ def exec_runbook(
 
 @exec_app.command("runbooks")
 def exec_runbooks(
-    output_dir: str = typer.Option("", help="Output directory (default: docs/runbooks or docs/runbooks-cumulative)"),
+    output_dir: str = typer.Option(
+        "", help="Output directory (auto-selects based on mode)",
+    ),
     mode: str = typer.Option("isolated", help="Scoring mode: isolated or cumulative"),
 ) -> None:
     """Generate all 11 runbooks."""
