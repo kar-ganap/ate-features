@@ -126,6 +126,43 @@ def exec_verify_patches(
     typer.echo(f"\n{valid}/{total} valid patches")
 
 
+@exec_app.command("runbook")
+def exec_runbook(
+    treatment_id: str,
+) -> None:
+    """Generate and print a runbook for one treatment."""
+    from ate_features.config import load_features, load_treatments
+    from ate_features.runbook import generate_runbook
+
+    tid = _parse_tid(treatment_id)
+    config = load_treatments()
+    treatment = next(t for t in config.treatments if t.id == tid)
+    features = load_features().features
+
+    runbook = generate_runbook(
+        treatment,
+        features,
+        assignments=config.feature_assignments.explicit,
+    )
+    typer.echo(runbook)
+
+
+@exec_app.command("runbooks")
+def exec_runbooks(
+    output_dir: str = "docs/runbooks",
+) -> None:
+    """Generate all 11 runbooks to docs/runbooks/."""
+    from pathlib import Path
+
+    from ate_features.runbook import generate_all_runbooks, save_runbooks
+
+    runbooks = generate_all_runbooks()
+    paths = save_runbooks(runbooks, Path(output_dir))
+    typer.echo(f"Generated {len(paths)} runbooks:")
+    for p in paths:
+        typer.echo(f"  {p}")
+
+
 @exec_app.command("scaffold")
 def exec_scaffold(
     treatment_id: str,
