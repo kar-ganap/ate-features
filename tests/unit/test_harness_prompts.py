@@ -3,7 +3,11 @@
 from pathlib import Path
 
 from ate_features.config import load_features, load_treatments
-from ate_features.harness import get_opening_prompt, render_session_guide
+from ate_features.harness import (
+    get_opening_prompt,
+    is_per_feature_treatment,
+    render_session_guide,
+)
 
 
 def _get_treatment(treatment_id):
@@ -158,3 +162,38 @@ class TestRenderSessionGuide:
             treatment, features, run_dir, specialization_context=context,
         )
         assert "Serializer Subsystem domain context" in guide
+
+
+class TestPatchInstructions:
+    def test_single_session_treatment_has_patch_instructions(self) -> None:
+        treatment = _get_treatment("0a")
+        features = _get_features()
+        prompt = get_opening_prompt(treatment, features)
+        assert "git diff" in prompt
+        assert "git checkout" in prompt
+        assert "git clean" in prompt
+
+    def test_per_feature_treatment_has_single_feature_instructions(self) -> None:
+        treatment = _get_treatment("0b")
+        assert is_per_feature_treatment(treatment)
+        features = _get_features()[:1]  # Single feature for per-feature
+        prompt = get_opening_prompt(treatment, features)
+        assert "git diff" in prompt
+        # Per-feature patch section should say "this feature", not "EACH feature"
+        patch_section = prompt[prompt.index("## Patch Instructions"):]
+        assert "this feature" in patch_section.lower()
+        assert "each feature" not in patch_section.lower()
+
+    def test_opt_out_patch_instructions(self) -> None:
+        treatment = _get_treatment("0a")
+        features = _get_features()
+        prompt = get_opening_prompt(
+            treatment, features, include_patch_instructions=False,
+        )
+        assert "git diff" not in prompt
+
+    def test_patch_instructions_contain_treatment_id(self) -> None:
+        treatment = _get_treatment(1)
+        features = _get_features()
+        prompt = get_opening_prompt(treatment, features)
+        assert "treatment-1" in prompt

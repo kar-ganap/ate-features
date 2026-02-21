@@ -145,6 +145,7 @@ def get_opening_prompt(
     assignments: FeatureAssignment | None = None,
     specialization_context: str | None = None,
     communication_nudge: str | None = None,
+    include_patch_instructions: bool = True,
 ) -> str:
     """Generate the opening prompt for a treatment session."""
     parts: list[str] = []
@@ -170,6 +171,10 @@ def get_opening_prompt(
         parts.append(_detailed_prompt(treatment, features, assignments))
     else:
         parts.append(_vague_prompt(features))
+
+    # Patch instructions
+    if include_patch_instructions:
+        parts.append(_patch_instructions(treatment, features))
 
     return "\n".join(parts)
 
@@ -205,6 +210,36 @@ def _detailed_prompt(
         ]:
             lines.append(f"- **Agent {agent_num}:** {', '.join(feats)}")
         lines.append("")
+
+    return "\n".join(lines)
+
+
+def _patch_instructions(treatment: Treatment, features: list[Feature]) -> str:
+    """Generate patch save/reset instructions for the opening prompt."""
+    tid = treatment.id
+    lines: list[str] = []
+    lines.append("## Patch Instructions\n")
+
+    if is_per_feature_treatment(treatment):
+        # Per-feature: single feature per session
+        fid = features[0].id if features else "FN"
+        lines.append("After implementing this feature, save the patch and reset:")
+        lines.append("```")
+        lines.append(f"git diff > data/patches/treatment-{tid}/{fid}.patch")
+        lines.append("git checkout . && git clean -fd")
+        lines.append("```\n")
+    else:
+        # Multi-feature: save each feature separately
+        lines.append(
+            "After implementing each feature, save the patch and reset:"
+        )
+        lines.append("```")
+        lines.append(f"git diff > data/patches/treatment-{tid}/<FN>.patch")
+        lines.append("git checkout . && git clean -fd")
+        lines.append("```")
+        lines.append(
+            "Save a separate patch for EACH feature before resetting.\n"
+        )
 
     return "\n".join(lines)
 
