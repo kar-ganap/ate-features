@@ -234,7 +234,58 @@ The execution harness (`src/ate_features/harness.py`) automates session setup:
 - **Wave 2**: Run treatments 6–8 (3 specialized variants). Only if Wave 1 shows
   meaningful variance.
 
-## 10. Change Log
+## 10. Cumulative Scoring Mode
+
+### Motivation
+
+Treatment 0a (control) scored 97.5% in 30 minutes — a ceiling effect identical
+to the predecessor experiment. Root cause: the **isolated patch-and-reset
+protocol eliminates the collaboration signal**. Each feature starts from a clean
+working tree, so agents working on correlated features (e.g., F1/F2 both
+modifying `_msgpack_default()`) never see each other's changes. The collaboration
+hypothesis requires concurrent work on shared files, but isolated measurement
+resets the tree between features — making these goals mutually exclusive.
+
+### Protocol
+
+In cumulative mode, agents work on the **same working tree** without resets:
+
+1. Implement F1
+2. `git diff > data/patches/treatment-{tid}/F1.patch` (snapshot)
+3. `git add -A` (stage changes, keep working)
+4. Implement F2
+5. `git diff > data/patches/treatment-{tid}/F2.patch` (incremental snapshot)
+6. `git add -A`
+7. ... repeat for F3–F8 ...
+8. `git diff --staged > data/patches/treatment-{tid}/cumulative.patch` (combined)
+
+Scoring applies `cumulative.patch` to a clean tree, runs all 104 acceptance
+tests, and groups results by feature ID (extracted from test classnames).
+
+### Treatments (Cumulative Round)
+
+Three treatments to compare:
+
+| ID | Label | Why |
+|----|-------|-----|
+| 0a | Control | Single agent, sequential — natural coordination |
+| 1 | Structured Team | AT, explicit decomposition, 4×2 — structured coordination |
+| 5 | Max Parallelism | AT, explicit decomposition, 8×1 — maximum parallelism |
+
+### CLI Usage
+
+```bash
+# Score with cumulative mode
+ate-features score collect 0a --mode cumulative
+
+# Generate runbooks with cumulative instructions
+ate-features exec runbook 0a --mode cumulative
+ate-features exec runbooks --mode cumulative
+```
+
+Existing isolated mode remains the default (`--mode isolated`).
+
+## 11. Change Log
 
 | Date | Change | Rationale |
 |------|--------|-----------|
@@ -246,3 +297,4 @@ The execution harness (`src/ate_features/harness.py`) automates session setup:
 | 2026-02-20 | Phase 2: execution harness, specialization files, CLI exec commands | Scaffold/prompt/patch/status infrastructure for running treatments |
 | 2026-02-20 | Phase 3: T4 backfill F1-F4 (104 total), scoring framework, Wave 2 gate | Composite weights, JUnit XML parsing, score collection, CLI score commands |
 | 2026-02-20 | Phase 4: execution runner — preflight, patch instructions, verify, runbooks | Operational infrastructure for running Wave 1 treatments reliably |
+| 2026-02-20 | Phase 5: cumulative scoring mode — parallel to isolated, no resets, cumulative.patch | Isolated protocol eliminates collaboration signal; cumulative creates coordination opportunities |
