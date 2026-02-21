@@ -78,6 +78,91 @@ def comms_summary(session_id: str, treatment_id: str) -> None:
             typer.echo(f"  {tax}: {count}")
 
 
+@exec_app.command("preflight")
+def exec_preflight(
+    langgraph_dir: str = "data/langgraph",
+) -> None:
+    """Run preflight checks on the LangGraph directory."""
+    from pathlib import Path
+
+    from ate_features.config import load_features
+    from ate_features.harness import preflight_check
+
+    lg_path = Path(langgraph_dir)
+    portfolio = load_features()
+
+    result = preflight_check(lg_path, expected_pin=portfolio.langgraph_pin)
+
+    if result.issues:
+        typer.echo("Preflight FAILED:")
+        for issue in result.issues:
+            typer.echo(f"  - {issue}")
+    else:
+        typer.echo("Preflight PASSED")
+
+    typer.echo(f"Claude Code version: {result.claude_code_version}")
+
+
+@exec_app.command("verify-patches")
+def exec_verify_patches(
+    treatment_id: str,
+    langgraph_dir: str | None = None,
+) -> None:
+    """Verify patch files for a treatment (F1-F8)."""
+    from pathlib import Path
+
+    from ate_features.harness import verify_patches
+
+    tid = _parse_tid(treatment_id)
+    lg_path = Path(langgraph_dir) if langgraph_dir else None
+
+    result = verify_patches(tid, langgraph_dir=lg_path)
+
+    for fid, status in sorted(result.items()):
+        typer.echo(f"  {fid}: {status.value}")
+
+    valid = sum(1 for s in result.values() if s.value == "valid")
+    total = len(result)
+    typer.echo(f"\n{valid}/{total} valid patches")
+
+
+@exec_app.command("runbook")
+def exec_runbook(
+    treatment_id: str,
+) -> None:
+    """Generate and print a runbook for one treatment."""
+    from ate_features.config import load_features, load_treatments
+    from ate_features.runbook import generate_runbook
+
+    tid = _parse_tid(treatment_id)
+    config = load_treatments()
+    treatment = next(t for t in config.treatments if t.id == tid)
+    features = load_features().features
+
+    runbook = generate_runbook(
+        treatment,
+        features,
+        assignments=config.feature_assignments.explicit,
+    )
+    typer.echo(runbook)
+
+
+@exec_app.command("runbooks")
+def exec_runbooks(
+    output_dir: str = "docs/runbooks",
+) -> None:
+    """Generate all 11 runbooks to docs/runbooks/."""
+    from pathlib import Path
+
+    from ate_features.runbook import generate_all_runbooks, save_runbooks
+
+    runbooks = generate_all_runbooks()
+    paths = save_runbooks(runbooks, Path(output_dir))
+    typer.echo(f"Generated {len(paths)} runbooks:")
+    for p in paths:
+        typer.echo(f"  {p}")
+
+
 @exec_app.command("scaffold")
 def exec_scaffold(
     treatment_id: str,

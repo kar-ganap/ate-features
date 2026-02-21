@@ -42,6 +42,7 @@ ate-features/
 │   ├── features.yaml          # 8 LangGraph features with specs
 │   ├── treatments.yaml        # 11 treatments (8 core + 3 specialized)
 │   ├── scoring.yaml           # Composite weights + Wave 2 threshold
+│   ├── execution.yaml         # Escape threshold, transcript path hint
 │   ├── specializations/        # 4 agent domain context files
 │   └── prompts/
 │       └── communication_nudges.yaml  # Pattern-quality nudges
@@ -57,14 +58,15 @@ ate-features/
 │   ├── scores/                # Tiered scores
 │   └── acceptance-tests/      # T1/T2/T3 test suites per feature
 ├── src/ate_features/
-│   ├── models.py              # Pydantic models (incl. RunMetadata, TieredScore)
-│   ├── config.py              # YAML loading + specialization + scoring config
-│   ├── harness.py             # Execution harness (scaffold, prompts, patches)
+│   ├── models.py              # Pydantic models (incl. PatchStatus, PreflightResult, TieredScore)
+│   ├── config.py              # YAML loading + specialization + scoring + execution config
+│   ├── harness.py             # Execution harness (scaffold, prompts, patches, preflight, verify)
 │   ├── scoring.py             # Scoring: XML parsing, collection, aggregation, Wave 2
+│   ├── runbook.py             # Per-treatment runbook generation
 │   ├── communication.py       # Transcript parsing + communication models
 │   └── cli.py                 # CLI with comms + exec + score subcommands
 ├── tests/
-│   ├── unit/                  # Unit tests (163 tests)
+│   ├── unit/                  # Unit tests (204 tests)
 │   └── acceptance/            # LangGraph acceptance tests (104 tests)
 ├── scripts/
 │   ├── pin_langgraph.sh       # Clone pinned LangGraph
@@ -81,12 +83,12 @@ ate-features/
 
 ## Current State
 
-**Phase 3 complete.** Scoring framework: T4 backfill for F1-F4 (104
-acceptance tests), composite weights (`config/scoring.yaml`), JUnit XML
-parsing, score collection/persistence, aggregation, Wave 2 decision gate,
-CLI score commands.
+**Phase 4 complete.** Execution runner: preflight checks (records CC
+version), patch instructions in opening prompts, patch verification
+(`PatchStatus` model), runbook generation (11 per-treatment runbooks
+in `docs/runbooks/`), execution config (`config/execution.yaml`).
 
-163 unit tests + 104 acceptance tests = 267 total.
+204 unit tests + 104 acceptance tests = 308 total.
 
 ## Phases
 
@@ -96,6 +98,7 @@ CLI score commands.
 | 1 | `phase-1-langgraph-tests` | Complete |
 | 2 | `phase-2-execution-harness` | Complete |
 | 3 | `phase-3-scoring-framework` | Complete |
+| 4 | `phase-4-execution-runner` | Complete |
 
 ## Acceptance Test Results (against pinned LangGraph)
 
@@ -122,9 +125,17 @@ All 104 tests fail against pinned commit. 0 passing. Uniform structure:
 
 ## Execution Harness
 
-- `src/ate_features/harness.py` — directory mgmt, prompts, scaffolding, patches
+- `src/ate_features/harness.py` — directory mgmt, prompts, scaffolding, patches, preflight, verify
 - `config/specializations/serde_*.md` — 4 domain context files named by content
-- CLI: `ate-features exec scaffold <treatment_id>`, `ate-features exec status`
+- `config/execution.yaml` — escape threshold (45 min), transcript path hint
+- CLI: `ate-features exec scaffold <tid>`, `ate-features exec status`,
+  `ate-features exec preflight`, `ate-features exec verify-patches <tid>`,
+  `ate-features exec runbook <tid>`, `ate-features exec runbooks`
+- `preflight_check()` verifies LangGraph pin + clean tree, records CC version
+- `verify_patches()` checks F1-F8 patches: exist → non-empty → applies cleanly
+- Opening prompts include git diff/checkout/clean patch instructions by default
+- `src/ate_features/runbook.py` — per-treatment markdown runbooks with shell commands,
+  monitoring, checklists. 11 runbooks committed in `docs/runbooks/`
 - Specialization files mapped by agent number: `load_specialization(1-4)`
 - Per-feature treatments (0b, 6): 8×1 without Agent Teams → 8 sub-directories
 - `apply_patch()` does `--check` before `apply`; `revert_langgraph()` does `checkout . && clean -fd`

@@ -9,6 +9,8 @@ from pathlib import Path
 from ate_features.models import (
     Feature,
     FeatureAssignment,
+    PatchStatus,
+    PreflightResult,
     PromptSpecificity,
     RunMetadata,
     Specialization,
@@ -17,6 +19,77 @@ from ate_features.models import (
 )
 
 DEFAULT_DATA_DIR = Path(__file__).parent.parent.parent / "data"
+
+
+# --- Preflight Checks ---
+
+
+def preflight_check(
+    langgraph_dir: Path,
+    *,
+    expected_pin: str | None = None,
+) -> PreflightResult:
+    """Run preflight checks on the LangGraph directory.
+
+    Checks:
+    1. Directory exists
+    2. .git directory exists
+    3. HEAD matches expected pin
+    4. Working tree is clean
+    5. Records Claude Code version (informational)
+
+    Returns PreflightResult with issues list and recorded CC version.
+    """
+    issues: list[str] = []
+
+    # 1. Directory exists
+    if not langgraph_dir.exists():
+        issues.append(f"LangGraph directory does not exist: {langgraph_dir}")
+        return PreflightResult(issues=issues)
+
+    # 2. .git exists
+    if not (langgraph_dir / ".git").exists():
+        issues.append(f"No .git directory in {langgraph_dir}")
+        return PreflightResult(issues=issues)
+
+    # 3. HEAD matches expected pin
+    if expected_pin is not None:
+        head_result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=langgraph_dir,
+            capture_output=True,
+            text=True,
+        )
+        head = head_result.stdout.strip()
+        if not head.startswith(expected_pin):
+            issues.append(
+                f"Commit mismatch: HEAD={head[:12]}, expected={expected_pin[:12]}"
+            )
+
+    # 4. Clean working tree
+    status_result = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=langgraph_dir,
+        capture_output=True,
+        text=True,
+    )
+    if status_result.stdout.strip():
+        issues.append("Working tree is not clean (dirty)")
+
+    # 5. Record CC version (informational, never an issue)
+    cc_version = "unknown"
+    try:
+        cc_result = subprocess.run(
+            ["claude", "--version"],
+            capture_output=True,
+            text=True,
+        )
+        if cc_result.returncode == 0 and cc_result.stdout.strip():
+            cc_version = cc_result.stdout.strip()
+    except FileNotFoundError:
+        pass
+
+    return PreflightResult(issues=issues, claude_code_version=cc_version)
 
 
 def get_run_dir(
@@ -73,6 +146,7 @@ def get_opening_prompt(
     assignments: FeatureAssignment | None = None,
     specialization_context: str | None = None,
     communication_nudge: str | None = None,
+    include_patch_instructions: bool = True,
 ) -> str:
     """Generate the opening prompt for a treatment session."""
     parts: list[str] = []
@@ -98,6 +172,10 @@ def get_opening_prompt(
         parts.append(_detailed_prompt(treatment, features, assignments))
     else:
         parts.append(_vague_prompt(features))
+
+    # Patch instructions
+    if include_patch_instructions:
+        parts.append(_patch_instructions(treatment, features))
 
     return "\n".join(parts)
 
@@ -133,6 +211,36 @@ def _detailed_prompt(
         ]:
             lines.append(f"- **Agent {agent_num}:** {', '.join(feats)}")
         lines.append("")
+
+    return "\n".join(lines)
+
+
+def _patch_instructions(treatment: Treatment, features: list[Feature]) -> str:
+    """Generate patch save/reset instructions for the opening prompt."""
+    tid = treatment.id
+    lines: list[str] = []
+    lines.append("## Patch Instructions\n")
+
+    if is_per_feature_treatment(treatment):
+        # Per-feature: single feature per session
+        fid = features[0].id if features else "FN"
+        lines.append("After implementing this feature, save the patch and reset:")
+        lines.append("```")
+        lines.append(f"git diff > data/patches/treatment-{tid}/{fid}.patch")
+        lines.append("git checkout . && git clean -fd")
+        lines.append("```\n")
+    else:
+        # Multi-feature: save each feature separately
+        lines.append(
+            "After implementing each feature, save the patch and reset:"
+        )
+        lines.append("```")
+        lines.append(f"git diff > data/patches/treatment-{tid}/<FN>.patch")
+        lines.append("git checkout . && git clean -fd")
+        lines.append("```")
+        lines.append(
+            "Save a separate patch for EACH feature before resetting.\n"
+        )
 
     return "\n".join(lines)
 
@@ -319,6 +427,47 @@ def _scaffold_session(
 
 
 # --- Patch Management ---
+
+FEATURE_IDS = [f"F{i}" for i in range(1, 9)]
+
+
+def verify_patches(
+    treatment_id: int | str,
+    *,
+    langgraph_dir: Path | None = None,
+    data_dir: Path = DEFAULT_DATA_DIR,
+) -> dict[str, PatchStatus]:
+    """Verify patch files for a treatment.
+
+    Checks F1-F8: exist → non-empty → applies cleanly (if langgraph_dir given).
+    """
+    result: dict[str, PatchStatus] = {}
+    patch_dir = data_dir / "patches" / f"treatment-{treatment_id}"
+
+    for fid in FEATURE_IDS:
+        patch_path = patch_dir / f"{fid}.patch"
+
+        if not patch_path.exists():
+            result[fid] = PatchStatus.MISSING
+            continue
+
+        if patch_path.stat().st_size == 0:
+            result[fid] = PatchStatus.EMPTY
+            continue
+
+        if langgraph_dir is not None:
+            check = subprocess.run(
+                ["git", "apply", "--check", str(patch_path)],
+                cwd=langgraph_dir,
+                capture_output=True,
+            )
+            if check.returncode != 0:
+                result[fid] = PatchStatus.INVALID
+                continue
+
+        result[fid] = PatchStatus.VALID
+
+    return result
 
 
 def apply_patch(patch_path: Path, langgraph_dir: Path) -> bool:

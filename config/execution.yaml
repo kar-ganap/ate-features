@@ -1,0 +1,5 @@
+# Execution parameters for running experiment sessions.
+# CC version is recorded at runtime by preflight_check(), not pinned here.
+
+escape_threshold_minutes: 45
+transcript_path_hint: "~/.claude/projects/-Users-kartikganapathi-Documents-Personal-random_projects-others-projects-checkout-ate-features/"
