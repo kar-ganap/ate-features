@@ -66,7 +66,8 @@ Tiered methodology creating a quality gradient:
 - **T4 (Smoke/Integration)**: End-to-end realistic multi-node workflows with
   checkpointer. Tests behavioral correctness in production-like scenarios.
 
-Acceptance test suites written in Phase 1. All tests FAIL against pinned commit.
+Per feature: 3 T1 + 5 T2 + 3 T3 + 2 T4 = 13 tests. 8 features × 13 = 104 total.
+All tests FAIL against pinned commit.
 
 ## 5. Prompt Design
 
@@ -159,7 +160,24 @@ For each feature x treatment:
 - T2 score: `t2_passed / t2_total` (automated, edge cases)
 - T3 score: `t3_passed / t3_total` (quality assessment)
 - T4 score: `t4_passed / t4_total` (smoke/integration)
-- Composite: weighted combination (weights TBD in Phase 3)
+- Composite: `0.15*T1 + 0.35*T2 + 0.30*T3 + 0.20*T4`
+
+### Composite Weights
+
+| Tier | Weight | Rationale |
+|------|--------|-----------|
+| T1 (basic) | 0.15 | Low discriminating power — expected to mostly pass |
+| T2 (edge cases) | 0.35 | Highest test count (5/feature), best signal |
+| T3 (quality) | 0.30 | Robustness/performance, meaningful differentiation |
+| T4 (smoke) | 0.20 | Integration tests, checkpoint round-trips |
+
+Weights stored in `config/scoring.yaml` (committed, not hardcoded).
+
+### Wave 2 Decision Gate
+
+Coefficient of variation (CV) of mean composite scores across treatments.
+If CV > 0.10 → recommend Wave 2 (specialized treatments add signal).
+CLI: `ate-features score decide-wave2`.
 
 ### Communication Analysis
 
@@ -226,3 +244,4 @@ The execution harness (`src/ate_features/harness.py`) automates session setup:
 | 2026-02-20 | Replace F5-F8: harder features, add T4 smoke tier, 96 total tests (all fail) | F5-F8 too easy (9-11/11 passing) |
 | 2026-02-20 | Add specialization dimension + 3 treatments (6, 7, 8), 2-wave execution | Test whether spawn-prompt domain context improves outcomes |
 | 2026-02-20 | Phase 2: execution harness, specialization files, CLI exec commands | Scaffold/prompt/patch/status infrastructure for running treatments |
+| 2026-02-20 | Phase 3: T4 backfill F1-F4 (104 total), scoring framework, Wave 2 gate | Composite weights, JUnit XML parsing, score collection, CLI score commands |

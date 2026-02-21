@@ -4,8 +4,6 @@ Currently StrEnum values may be downcast to plain strings during serialization.
 The EXT_CONSTRUCTOR mechanism should preserve the enum type through round-trips.
 """
 
-from __future__ import annotations
-
 from enum import StrEnum
 
 from pydantic import BaseModel
@@ -200,3 +198,77 @@ class TestT3Quality:
 
         assert isinstance(result["p"], Priority)
         assert result["p"] == Priority.HIGH
+
+
+class TestT4Smoke:
+    """Smoke/integration tests — realistic multi-node workflows."""
+
+    def test_strenum_survives_graph_checkpoint(self) -> None:
+        """StrEnum value in state survives checkpoint round-trip."""
+        import operator
+        from typing import Annotated
+
+        from langgraph.checkpoint.memory import InMemorySaver
+        from langgraph.graph import StateGraph
+        from typing_extensions import TypedDict
+
+        class State(TypedDict):
+            log: Annotated[list[str], operator.add]
+            color: Color
+
+        def step_1(state: State) -> dict:
+            return {"log": ["step_1"], "color": Color.GREEN}
+
+        def step_2(state: State) -> dict:
+            return {"log": ["step_2"]}
+
+        graph = StateGraph(State)
+        graph.add_node("step_1", step_1)
+        graph.add_node("step_2", step_2)
+        graph.add_edge("step_1", "step_2")
+        graph.set_entry_point("step_1")
+        graph.set_finish_point("step_2")
+
+        memory = InMemorySaver()
+        compiled = graph.compile(checkpointer=memory)
+        config = {"configurable": {"thread_id": "f3-smoke"}}
+
+        result = compiled.invoke(
+            {"log": [], "color": Color.RED}, config=config
+        )
+        assert result["log"] == ["step_1", "step_2"]
+        assert isinstance(result["color"], Color)
+        assert result["color"] == Color.GREEN
+
+        state = compiled.get_state(config)
+        assert isinstance(state.values["color"], Color)
+
+    def test_strenum_list_accumulates_in_graph(self) -> None:
+        """StrEnum values accumulate in list reducer across graph nodes."""
+        import operator
+        from typing import Annotated
+
+        from langgraph.graph import END, StateGraph
+        from typing_extensions import TypedDict
+
+        class State(TypedDict):
+            colors: Annotated[list[Color], operator.add]
+            count: int
+
+        def add_color(state: State) -> dict:
+            color = [Color.RED, Color.GREEN, Color.BLUE][state["count"]]
+            return {"colors": [color], "count": state["count"] + 1}
+
+        def route(state: State) -> str:
+            return END if state["count"] >= 3 else "add_color"
+
+        graph = StateGraph(State)
+        graph.add_node("add_color", add_color)
+        graph.add_conditional_edges("add_color", route)
+        graph.set_entry_point("add_color")
+        compiled = graph.compile()
+
+        result = compiled.invoke({"colors": [], "count": 0})
+        assert len(result["colors"]) == 3
+        assert all(isinstance(c, Color) for c in result["colors"])
+        assert result["colors"] == [Color.RED, Color.GREEN, Color.BLUE]

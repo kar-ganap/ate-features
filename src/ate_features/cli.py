@@ -7,8 +7,10 @@ import typer
 app = typer.Typer(help="Agent Teams Eval: feature implementation in LangGraph")
 comms_app = typer.Typer(help="Communication analysis")
 exec_app = typer.Typer(help="Execution management")
+score_app = typer.Typer(help="Scoring and analysis")
 app.add_typer(comms_app, name="comms")
 app.add_typer(exec_app, name="exec")
+app.add_typer(score_app, name="score")
 
 
 @app.command()
@@ -117,3 +119,132 @@ def exec_status() -> None:
             patch = get_patch_path(t.id, f.id)
             row += f"{'  ✓' if patch.exists() else '  ·':>6}"
         typer.echo(row)
+
+
+# --- Score Commands ---
+
+
+def _parse_tid(treatment_id: str) -> int | str:
+    """Parse treatment_id: try int first, fall back to string."""
+    try:
+        return int(treatment_id)
+    except ValueError:
+        return treatment_id
+
+
+def _load_weights() -> dict[str, float]:
+    """Load scoring weights from config."""
+    from ate_features.config import load_scoring_config
+
+    config = load_scoring_config()
+    raw_weights = config.get("weights")
+    if not isinstance(raw_weights, dict):
+        msg = "scoring.yaml missing 'weights' dict"
+        raise ValueError(msg)
+    return {str(k): float(v) for k, v in raw_weights.items()}
+
+
+@score_app.command("collect")
+def score_collect(
+    treatment_id: str,
+    langgraph_dir: str = "data/langgraph",
+) -> None:
+    """Collect scores by applying patches and running acceptance tests."""
+    from pathlib import Path
+
+    from ate_features.scoring import collect_scores
+
+    tid = _parse_tid(treatment_id)
+    lg_path = Path(langgraph_dir)
+
+    if not lg_path.exists():
+        typer.echo(f"LangGraph directory not found: {lg_path}", err=True)
+        raise typer.Exit(1)
+
+    typer.echo(f"Collecting scores for treatment {tid}...")
+    scores = collect_scores(tid, lg_path)
+
+    if not scores:
+        typer.echo("No patches found — nothing to score.")
+        return
+
+    typer.echo(f"Scored {len(scores)} features:")
+    for s in scores:
+        typer.echo(
+            f"  {s.feature_id}: T1={s.t1_passed}/{s.t1_total} "
+            f"T2={s.t2_passed}/{s.t2_total} "
+            f"T3={s.t3_passed}/{s.t3_total} "
+            f"T4={s.t4_passed}/{s.t4_total}"
+        )
+
+
+@score_app.command("show")
+def score_show(
+    treatment_id: str | None = typer.Argument(None),
+) -> None:
+    """Display scores for a treatment (or all treatments)."""
+    from ate_features.scoring import (
+        load_all_scores,
+        load_scores,
+        summarize_treatment,
+    )
+
+    weights = _load_weights()
+
+    if treatment_id is not None:
+        tid = _parse_tid(treatment_id)
+        try:
+            scores = load_scores(tid)
+        except FileNotFoundError:
+            typer.echo(f"No scores found for treatment {tid}.", err=True)
+            raise typer.Exit(1)
+        summary = summarize_treatment(scores, weights)
+        _print_treatment_summary(tid, summary)
+    else:
+        all_scores = load_all_scores()
+        if not all_scores:
+            typer.echo("No scores collected yet.")
+            return
+        for tid_str, scores in sorted(all_scores.items()):
+            summary = summarize_treatment(scores, weights)
+            _print_treatment_summary(tid_str, summary)
+            typer.echo("")
+
+
+def _print_treatment_summary(
+    tid: int | str,
+    summary: dict[str, object],
+) -> None:
+    """Print a formatted treatment summary."""
+    typer.echo(f"Treatment {tid}:")
+    typer.echo(f"  Features scored: {summary['n_features']}")
+    mean_c = float(str(summary["mean_composite"]))
+    min_c = float(str(summary["min_composite"]))
+    max_c = float(str(summary["max_composite"]))
+    typer.echo(f"  Mean composite:  {mean_c:.4f}")
+    typer.echo(f"  Min composite:   {min_c:.4f}")
+    typer.echo(f"  Max composite:   {max_c:.4f}")
+    per_feature = summary.get("per_feature")
+    if isinstance(per_feature, dict) and per_feature:
+        typer.echo("  Per feature:")
+        for fid, score in sorted(per_feature.items()):
+            typer.echo(f"    {fid}: {float(str(score)):.4f}")
+
+
+@score_app.command("decide-wave2")
+def score_decide_wave2() -> None:
+    """Evaluate the Wave 2 decision gate."""
+    from ate_features.config import load_scoring_config
+    from ate_features.scoring import evaluate_wave2, load_all_scores
+
+    config = load_scoring_config()
+    weights = _load_weights()
+    cv_threshold = float(str(config.get("wave2_cv_threshold", 0.10)))
+
+    all_scores = load_all_scores()
+    if not all_scores:
+        typer.echo("No scores collected yet — cannot evaluate Wave 2.")
+        raise typer.Exit(1)
+
+    _recommend, reasoning = evaluate_wave2(all_scores, weights, cv_threshold)
+    typer.echo(reasoning)

@@ -1,0 +1,7 @@
+weights:
+  t1: 0.15
+  t2: 0.35
+  t3: 0.30
+  t4: 0.20
+
+wave2_cv_threshold: 0.10

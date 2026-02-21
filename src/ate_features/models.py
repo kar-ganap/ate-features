@@ -178,6 +178,15 @@ class TieredScore(BaseModel):
     def t4_score(self) -> float:
         return self.t4_passed / self.t4_total if self.t4_total > 0 else 0.0
 
+    def composite(self, weights: dict[str, float]) -> float:
+        """Compute weighted composite score."""
+        return (
+            weights["t1"] * self.t1_score
+            + weights["t2"] * self.t2_score
+            + weights["t3"] * self.t3_score
+            + weights["t4"] * self.t4_score
+        )
+
 
 # --- Run Tracking ---
 

@@ -4,8 +4,6 @@ Currently pandas types only work with pickle_fallback=True. This feature adds
 first-class msgpack ext type handlers for DataFrame and Series.
 """
 
-from __future__ import annotations
-
 import pytest
 
 
@@ -193,3 +191,79 @@ class TestT3Quality:
         result = serde.loads(serialized)
 
         pd.testing.assert_frame_equal(result["df"], df)
+
+
+class TestT4Smoke:
+    """Smoke/integration tests — realistic multi-node workflows."""
+
+    def test_dataframe_survives_graph_checkpoint(self) -> None:
+        """DataFrame in state survives checkpoint round-trip in multi-node graph."""
+        import operator
+        from typing import Annotated
+
+        import pandas as pd
+        from langgraph.checkpoint.memory import InMemorySaver
+        from langgraph.graph import StateGraph
+        from typing_extensions import TypedDict
+
+        class State(TypedDict):
+            log: Annotated[list[str], operator.add]
+            df: pd.DataFrame
+
+        def step_1(state: State) -> dict:
+            return {
+                "log": ["step_1"],
+                "df": pd.DataFrame({"a": [1, 2], "b": [3.0, 4.0]}),
+            }
+
+        def step_2(state: State) -> dict:
+            return {"log": ["step_2"]}
+
+        graph = StateGraph(State)
+        graph.add_node("step_1", step_1)
+        graph.add_node("step_2", step_2)
+        graph.add_edge("step_1", "step_2")
+        graph.set_entry_point("step_1")
+        graph.set_finish_point("step_2")
+
+        memory = InMemorySaver()
+        compiled = graph.compile(checkpointer=memory)
+        config = {"configurable": {"thread_id": "f1-smoke"}}
+
+        result = compiled.invoke({"log": [], "df": pd.DataFrame()}, config=config)
+        assert result["log"] == ["step_1", "step_2"]
+        assert isinstance(result["df"], pd.DataFrame)
+        assert list(result["df"]["a"]) == [1, 2]
+
+        state = compiled.get_state(config)
+        assert isinstance(state.values["df"], pd.DataFrame)
+
+    def test_series_survives_graph_execution(self) -> None:
+        """Series in state survives graph execution."""
+        import pandas as pd
+        from langgraph.graph import END, StateGraph
+        from typing_extensions import TypedDict
+
+        class State(TypedDict):
+            series: pd.Series
+            count: int
+
+        def produce(state: State) -> dict:
+            return {
+                "series": pd.Series([10, 20, 30], name="values"),
+                "count": state["count"] + 1,
+            }
+
+        def route(state: State) -> str:
+            return END if state["count"] >= 1 else "produce"
+
+        graph = StateGraph(State)
+        graph.add_node("produce", produce)
+        graph.add_conditional_edges("produce", route)
+        graph.set_entry_point("produce")
+        compiled = graph.compile()
+
+        result = compiled.invoke({"series": pd.Series(dtype=float), "count": 0})
+        assert isinstance(result["series"], pd.Series)
+        assert result["series"].name == "values"
+        assert list(result["series"]) == [10, 20, 30]
