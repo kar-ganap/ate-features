@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import re
+import subprocess
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -64,3 +67,140 @@ def _classify_tier(classname: str) -> str | None:
         if pattern in classname:
             return tier
     return None
+
+
+# --- Persistence ---
+
+_DEFAULT_DATA_DIR = Path(__file__).parent.parent.parent / "data"
+
+
+def save_scores(
+    scores: list[TieredScore],
+    treatment_id: int | str,
+    *,
+    data_dir: Path = _DEFAULT_DATA_DIR,
+) -> Path:
+    """Persist a list of TieredScores to data/scores/treatment-{id}.json."""
+    scores_dir = data_dir / "scores"
+    scores_dir.mkdir(parents=True, exist_ok=True)
+    path = scores_dir / f"treatment-{treatment_id}.json"
+    data = [s.model_dump(mode="json") for s in scores]
+    path.write_text(json.dumps(data, indent=2))
+    return path
+
+
+def load_scores(
+    treatment_id: int | str,
+    *,
+    data_dir: Path = _DEFAULT_DATA_DIR,
+) -> list[TieredScore]:
+    """Load TieredScores for a treatment from JSON."""
+    path = data_dir / "scores" / f"treatment-{treatment_id}.json"
+    if not path.exists():
+        msg = f"No scores found for treatment {treatment_id} at {path}"
+        raise FileNotFoundError(msg)
+    data = json.loads(path.read_text())
+    return [TieredScore(**entry) for entry in data]
+
+
+def load_all_scores(
+    *,
+    data_dir: Path = _DEFAULT_DATA_DIR,
+) -> dict[str, list[TieredScore]]:
+    """Load all treatment score files from data/scores/.
+
+    Returns a dict keyed by treatment_id (as string).
+    """
+    scores_dir = data_dir / "scores"
+    if not scores_dir.exists():
+        return {}
+
+    result: dict[str, list[TieredScore]] = {}
+    for path in sorted(scores_dir.glob("treatment-*.json")):
+        match = re.match(r"treatment-(.+)\.json$", path.name)
+        if match:
+            tid = match.group(1)
+            data = json.loads(path.read_text())
+            result[tid] = [TieredScore(**entry) for entry in data]
+    return result
+
+
+# --- Collection Pipeline ---
+
+
+def collect_scores(
+    treatment_id: int | str,
+    langgraph_dir: Path,
+    *,
+    data_dir: Path = _DEFAULT_DATA_DIR,
+) -> list[TieredScore]:
+    """Collect scores by applying patches, running tests, and parsing results.
+
+    For each feature with a patch file:
+    1. Apply the patch to langgraph_dir
+    2. Run pytest with --junitxml
+    3. Parse the XML into a TieredScore
+    4. Revert langgraph_dir
+
+    Persists results to data/scores/treatment-{id}.json.
+    Returns list of TieredScores (one per feature with a patch).
+    """
+    patch_dir = data_dir / "patches" / f"treatment-{treatment_id}"
+    if not patch_dir.exists():
+        return []
+
+    scores: list[TieredScore] = []
+    for patch_path in sorted(patch_dir.glob("*.patch")):
+        feature_id = patch_path.stem
+
+        # Apply patch (--check first)
+        check = subprocess.run(
+            ["git", "apply", "--check", str(patch_path)],
+            cwd=langgraph_dir,
+            capture_output=True,
+        )
+        if check.returncode != 0:
+            continue
+
+        subprocess.run(
+            ["git", "apply", str(patch_path)],
+            cwd=langgraph_dir,
+            capture_output=True,
+        )
+
+        try:
+            # Run pytest with junitxml output
+            xml_path = data_dir / "scores" / "tmp" / f"{feature_id}.xml"
+            xml_path.parent.mkdir(parents=True, exist_ok=True)
+
+            subprocess.run(
+                [
+                    "pytest",
+                    f"tests/acceptance/test_{feature_id.lower()}_*.py",
+                    f"--junitxml={xml_path}",
+                    "-q",
+                ],
+                cwd=langgraph_dir,
+                capture_output=True,
+            )
+
+            if xml_path.exists():
+                score = parse_junit_xml(xml_path, feature_id, treatment_id)
+                scores.append(score)
+        finally:
+            # Always revert
+            subprocess.run(
+                ["git", "checkout", "."],
+                cwd=langgraph_dir,
+                capture_output=True,
+            )
+            subprocess.run(
+                ["git", "clean", "-fd"],
+                cwd=langgraph_dir,
+                capture_output=True,
+            )
+
+    if scores:
+        save_scores(scores, treatment_id, data_dir=data_dir)
+
+    return scores
