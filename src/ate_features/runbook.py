@@ -17,6 +17,7 @@ from ate_features.harness import (
 from ate_features.models import (
     Feature,
     FeatureAssignment,
+    TeamSize,
     Treatment,
 )
 
@@ -227,13 +228,18 @@ def _notes_template(treatment: Treatment) -> str:
     ]
 
     if at:
-        lines.extend([
-            "## Assignment Confirmation",
-            "- Agent 1: F1, F5 (confirmed by lead)",
-            "- Agent 2: F2, F6 (confirmed by lead)",
-            "- Agent 3: F3, F7 (confirmed by lead)",
-            "- Agent 4: F4, F8 (confirmed by lead)\n",
-        ])
+        lines.append("## Assignment Confirmation")
+        if treatment.dimensions.team_size == TeamSize.EIGHT_BY_ONE:
+            for i in range(1, 9):
+                lines.append(f"- Agent {i}: F{i} (confirmed by lead)")
+        else:
+            lines.extend([
+                "- Agent 1: F1, F5 (confirmed by lead)",
+                "- Agent 2: F2, F6 (confirmed by lead)",
+                "- Agent 3: F3, F7 (confirmed by lead)",
+                "- Agent 4: F4, F8 (confirmed by lead)",
+            ])
+        lines.append("")
 
     lines.extend([
         "## Timeline",
@@ -620,16 +626,35 @@ def generate_all_runbooks(
     *, scoring_mode: str = "isolated",
 ) -> dict[int | str, str]:
     """Generate runbooks for all 11 treatments."""
+    from ate_features.config import (
+        load_communication_nudges,
+        load_specialization,
+    )
+    from ate_features.models import Specialization
+
     config = load_treatments()
     features = load_features().features
     assignments = config.feature_assignments.explicit
+    nudges = load_communication_nudges()
 
     runbooks: dict[int | str, str] = {}
     for treatment in config.treatments:
+        spec_context: str | None = None
+        if treatment.dimensions.specialization == Specialization.SPECIALIZED:
+            parts = [load_specialization(i) for i in range(1, 5)]
+            spec_context = "\n\n".join(parts)
+
+        nudge_text: str | None = None
+        comm = treatment.dimensions.communication
+        if comm is not None and comm.value != "neutral" and comm.value in nudges:
+            nudge_text = nudges[comm.value]["system_context"]
+
         runbooks[treatment.id] = generate_runbook(
             treatment,
             features,
             assignments=assignments,
+            specialization_context=spec_context,
+            communication_nudge=nudge_text,
             scoring_mode=scoring_mode,
         )
     return runbooks

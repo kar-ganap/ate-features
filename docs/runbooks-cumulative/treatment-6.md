@@ -85,6 +85,262 @@ claude
 Paste the following prompt:
 
 ````
+# Domain Context
+
+# Agent 1 Specialization: Serializer + State
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Extension Mechanism
+Custom types are handled via msgpack ext codes defined at module level:
+- `EXT_CONSTRUCTOR_SINGLE_ARG = 0` — constructor with 1 arg
+- `EXT_CONSTRUCTOR_POS_ARGS = 1` — constructor with *args
+- `EXT_CONSTRUCTOR_KW_ARGS = 2` — constructor with **kwargs
+- `EXT_METHOD_SINGLE_ARG = 3` — class method with 1 arg
+- `EXT_PYDANTIC_V1 = 4`, `EXT_PYDANTIC_V2 = 5`, `EXT_NUMPY_ARRAY = 6`
+
+### Adding New Types
+`_msgpack_default(obj)` uses cascading `isinstance`/`hasattr` checks. Each
+handler wraps data in a tuple `(module_path, class_name, serialized_data)`
+and packs it with `ormsgpack.Ext(code, encoded_bytes)`.
+
+`_msgpack_ext_hook(code, data)` reverses the process: unpacks the tuple,
+imports the class via `importlib.import_module`, and reconstructs the object.
+
+### Passthrough Options
+The serializer uses `OPT_PASSTHROUGH_DATACLASS | OPT_PASSTHROUGH_DATETIME |
+OPT_PASSTHROUGH_ENUM | OPT_PASSTHROUGH_UUID` to route these types through
+`_msgpack_default()` instead of ormsgpack's built-in handling.
+
+## State Subsystem
+
+### Architecture
+State management lives in `libs/langgraph/langgraph/graph/state.py` and
+the `channels/` package.
+
+### Key Files
+- `graph/state.py` — Channel selection from type annotations
+- `channels/binop.py` — `BinaryOperatorAggregate` (reducer channels)
+- `channels/last_value.py` — `LastValue` (default non-reducer channel)
+- `_internal/_fields.py` — `get_field_default()`, field introspection utilities
+
+### Channel Creation Pipeline
+1. `_get_channels(schema)` extracts type hints via `get_type_hints(schema, include_extras=True)`
+2. For each field, `_get_channel(name, typ)` decides the channel type:
+   - `_is_field_managed_value()` → managed value
+   - `_is_field_channel()` → explicit channel annotation
+   - `_is_field_binop()` → `BinaryOperatorAggregate` (has a reducer)
+   - Default → `LastValue`
+3. `_is_field_binop(typ)` inspects `Annotated` metadata for a callable with
+   a 2-parameter signature to use as the binary reduction operator
+
+### Cross-subsystem Boundaries
+- Serializer checkpoints state values that include channel contents
+- `BinaryOperatorAggregate` stores accumulated values that the serializer
+  must handle (lists, dicts, custom types)
+- Agent 2 also works on state channels — the channel construction pipeline
+  is shared between your work and theirs
+
+
+# Agent 2 Specialization: Serializer + State
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Pydantic Handling
+Pydantic models have dedicated ext codes:
+- `EXT_PYDANTIC_V1 = 4` — Pydantic V1 `BaseModel` instances
+- `EXT_PYDANTIC_V2 = 5` — Pydantic V2 `BaseModel` instances
+
+In `_msgpack_default(obj)`, a Pydantic V2 model is detected via
+`hasattr(obj, "model_dump")` and serialized as
+`(module, class_name, model_dump_dict)`. The ext hook reconstructs via
+`cls(**data)`.
+
+### Round-trip Pattern
+`dumps_typed(obj)` → ormsgpack with passthrough options → `_msgpack_default`
+for unhandled types → ext bytes.
+`loads_typed((type_tag, bytes))` → ormsgpack unpack → `_msgpack_ext_hook`
+for ext codes → reconstructed object.
+
+The `type_tag` is a string (`"msgpack"` or `"json"`) that selects the codec.
+
+## State Subsystem
+
+### Architecture
+State management lives in `libs/langgraph/langgraph/graph/state.py` and
+the `channels/` package.
+
+### Key Files
+- `graph/state.py` — Channel selection from type annotations
+- `channels/binop.py` — `BinaryOperatorAggregate` (reducer channels)
+- `channels/last_value.py` — `LastValue` (default non-reducer channel)
+- `_internal/_fields.py` — `get_field_default()`, field introspection utilities
+
+### BinaryOperatorAggregate Internals
+`__init__(self, typ, operator, default=...)` stores the reduction function
+and initializes `self.value = default if default is not EMPTY else typ()`.
+
+`update(values)` folds: `self.value = reduce(operator, values, self.value)`.
+
+`get()` returns the current accumulated value.
+
+The `typ()` call for default initialization means the type must be
+callable with zero arguments (e.g., `list`, `dict`, `int`). Custom types
+that require constructor arguments need an explicit `default` parameter.
+
+### Cross-subsystem Boundaries
+- Serializer checkpoints state values that include channel contents
+- `BinaryOperatorAggregate` stores accumulated values that the serializer
+  must handle (lists, dicts, custom types)
+- Agent 1 also works on state channels — the channel construction pipeline
+  is shared between your work and theirs
+
+
+# Agent 3 Specialization: Serializer + Streaming
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Enum Handling
+Standard `Enum` and `StrEnum` instances are routed through `_msgpack_default()`
+via the `OPT_PASSTHROUGH_ENUM` option. They are serialized with
+`EXT_CONSTRUCTOR_SINGLE_ARG = 0`: the ext payload is
+`(module, class_name, member_value)`.
+
+Reconstruction in `_msgpack_ext_hook()` imports the class and calls
+`cls(value)` to get the enum member back.
+
+The passthrough option is critical — without it, ormsgpack serializes enums
+as their raw value (string/int) and type identity is lost on deserialization.
+
+### Passthrough Options
+The serializer uses `OPT_PASSTHROUGH_DATACLASS | OPT_PASSTHROUGH_DATETIME |
+OPT_PASSTHROUGH_ENUM | OPT_PASSTHROUGH_UUID` to route these types through
+`_msgpack_default()` instead of ormsgpack's built-in handling.
+
+## Streaming Subsystem
+
+### Architecture
+Stream message handling lives in
+`libs/langgraph/langgraph/pregel/_messages.py`.
+
+### Key Files
+- `pregel/_messages.py` — `StreamMessagesHandler` callback handler
+- `pregel/loop.py` — Pregel execution loop (invokes handlers)
+- `types.py` — `StreamMode` enum and message type definitions
+
+### Message Emission Pipeline
+`StreamMessagesHandler` implements LangChain's `BaseCallbackHandler`.
+
+`_find_and_emit_messages(values)` is the core scanning method:
+1. Iterates over values in a state dict
+2. For each value that is a sequence (list/tuple), checks items
+3. Items that are `BaseMessage` instances get emitted via the `stream` callback
+4. Scanning depth is limited — only top-level state keys and their
+   immediate sequence contents are checked
+
+The `on_chain_end(outputs)` callback triggers `_find_and_emit_messages`
+after each node completes, extracting messages from the node's output state.
+
+### Cross-subsystem Boundaries
+- Serialized checkpoints include streaming state (which messages have been
+  emitted) for resume scenarios
+- Agent 4 also works on streaming — message deduplication depends on the
+  emission scanning logic you work on
+
+
+# Agent 4 Specialization: Serializer + Streaming
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Nested Type Reconstruction
+`_msgpack_ext_hook(code, data)` handles reconstruction for all ext codes:
+- `EXT_CONSTRUCTOR_SINGLE_ARG = 0` — `cls(arg)`
+- `EXT_CONSTRUCTOR_POS_ARGS = 1` — `cls(*args)`
+- `EXT_CONSTRUCTOR_KW_ARGS = 2` — `cls(**kwargs)`
+- `EXT_METHOD_SINGLE_ARG = 3` — `getattr(cls, method)(arg)`
+
+When types are nested (e.g., an Enum inside a dataclass inside a list),
+ormsgpack processes ext codes bottom-up. Inner objects are deserialized
+first, then the containing structure's ext hook receives already-
+reconstructed inner values.
+
+### Extension Mechanism
+`_msgpack_default(obj)` uses cascading `isinstance`/`hasattr` checks. Each
+handler wraps data in a tuple `(module_path, class_name, serialized_data)`
+and packs it with `ormsgpack.Ext(code, encoded_bytes)`.
+
+The tuple structure is consistent across all ext codes — the ext hook
+always unpacks `(module, name, data)` and uses `importlib.import_module`
+to locate the class.
+
+## Streaming Subsystem
+
+### Architecture
+Stream message handling lives in
+`libs/langgraph/langgraph/pregel/_messages.py`.
+
+### Key Files
+- `pregel/_messages.py` — `StreamMessagesHandler` callback handler
+- `pregel/loop.py` — Pregel execution loop (invokes handlers)
+- `types.py` — `StreamMode` enum and message type definitions
+
+### Deduplication via Seen Set
+`StreamMessagesHandler.__init__()` initializes `self.seen: set[str]` to
+track message IDs that have already been emitted.
+
+`on_chain_start(inputs)` populates the seen set from input state via
+`_state_values(inputs)`: it scans input values for `BaseMessage` instances
+and adds their `id` to `self.seen`.
+
+When `_find_and_emit_messages()` encounters a message, it checks
+`msg.id in self.seen` before emitting. This prevents re-emitting messages
+that were already in the state when the node started.
+
+The seen set is populated from **inputs** (start of node) and checked
+during **outputs** (end of node), creating a before/after diff.
+
+### Cross-subsystem Boundaries
+- Serialized checkpoints include streaming state for resume scenarios
+- Agent 3 also works on streaming — the emission logic that Agent 3
+  modifies feeds into the deduplication logic you work on
+
+
 # Feature Implementation Task
 
 Implement the following features in the pinned LangGraph repository. For each feature: explore the codebase, implement the fix, run the acceptance tests, and create a patch file.
@@ -103,17 +359,10 @@ multi-index structures.
 
 ## Patch Instructions
 
-**CRITICAL:** Implement all features on the **same working tree**. Do NOT reset between features — each feature builds on the prior changes.
-
-After implementing **each** feature, snapshot your work:
-1. `git diff > data/patches/treatment-6/<FN>.patch`
-2. `git add -A`
-
-When **all** features are complete, save the combined patch:
-`git diff --staged > data/patches/treatment-6/cumulative.patch`
+**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-6/F1.patch`.
 
 
-Remember: after each feature, snapshot with `git diff > data/patches/treatment-6/<FN>.patch` then `git add -A`. When all features are done, save the combined patch with `git diff --staged > data/patches/treatment-6/cumulative.patch`. Start with F1.
+Remember: save your patch with `git diff > data/patches/treatment-6/F1.patch` when done.
 ````
 
 - [ ] Pasted opening prompt
@@ -135,6 +384,262 @@ claude
 Paste the following prompt:
 
 ````
+# Domain Context
+
+# Agent 1 Specialization: Serializer + State
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Extension Mechanism
+Custom types are handled via msgpack ext codes defined at module level:
+- `EXT_CONSTRUCTOR_SINGLE_ARG = 0` — constructor with 1 arg
+- `EXT_CONSTRUCTOR_POS_ARGS = 1` — constructor with *args
+- `EXT_CONSTRUCTOR_KW_ARGS = 2` — constructor with **kwargs
+- `EXT_METHOD_SINGLE_ARG = 3` — class method with 1 arg
+- `EXT_PYDANTIC_V1 = 4`, `EXT_PYDANTIC_V2 = 5`, `EXT_NUMPY_ARRAY = 6`
+
+### Adding New Types
+`_msgpack_default(obj)` uses cascading `isinstance`/`hasattr` checks. Each
+handler wraps data in a tuple `(module_path, class_name, serialized_data)`
+and packs it with `ormsgpack.Ext(code, encoded_bytes)`.
+
+`_msgpack_ext_hook(code, data)` reverses the process: unpacks the tuple,
+imports the class via `importlib.import_module`, and reconstructs the object.
+
+### Passthrough Options
+The serializer uses `OPT_PASSTHROUGH_DATACLASS | OPT_PASSTHROUGH_DATETIME |
+OPT_PASSTHROUGH_ENUM | OPT_PASSTHROUGH_UUID` to route these types through
+`_msgpack_default()` instead of ormsgpack's built-in handling.
+
+## State Subsystem
+
+### Architecture
+State management lives in `libs/langgraph/langgraph/graph/state.py` and
+the `channels/` package.
+
+### Key Files
+- `graph/state.py` — Channel selection from type annotations
+- `channels/binop.py` — `BinaryOperatorAggregate` (reducer channels)
+- `channels/last_value.py` — `LastValue` (default non-reducer channel)
+- `_internal/_fields.py` — `get_field_default()`, field introspection utilities
+
+### Channel Creation Pipeline
+1. `_get_channels(schema)` extracts type hints via `get_type_hints(schema, include_extras=True)`
+2. For each field, `_get_channel(name, typ)` decides the channel type:
+   - `_is_field_managed_value()` → managed value
+   - `_is_field_channel()` → explicit channel annotation
+   - `_is_field_binop()` → `BinaryOperatorAggregate` (has a reducer)
+   - Default → `LastValue`
+3. `_is_field_binop(typ)` inspects `Annotated` metadata for a callable with
+   a 2-parameter signature to use as the binary reduction operator
+
+### Cross-subsystem Boundaries
+- Serializer checkpoints state values that include channel contents
+- `BinaryOperatorAggregate` stores accumulated values that the serializer
+  must handle (lists, dicts, custom types)
+- Agent 2 also works on state channels — the channel construction pipeline
+  is shared between your work and theirs
+
+
+# Agent 2 Specialization: Serializer + State
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Pydantic Handling
+Pydantic models have dedicated ext codes:
+- `EXT_PYDANTIC_V1 = 4` — Pydantic V1 `BaseModel` instances
+- `EXT_PYDANTIC_V2 = 5` — Pydantic V2 `BaseModel` instances
+
+In `_msgpack_default(obj)`, a Pydantic V2 model is detected via
+`hasattr(obj, "model_dump")` and serialized as
+`(module, class_name, model_dump_dict)`. The ext hook reconstructs via
+`cls(**data)`.
+
+### Round-trip Pattern
+`dumps_typed(obj)` → ormsgpack with passthrough options → `_msgpack_default`
+for unhandled types → ext bytes.
+`loads_typed((type_tag, bytes))` → ormsgpack unpack → `_msgpack_ext_hook`
+for ext codes → reconstructed object.
+
+The `type_tag` is a string (`"msgpack"` or `"json"`) that selects the codec.
+
+## State Subsystem
+
+### Architecture
+State management lives in `libs/langgraph/langgraph/graph/state.py` and
+the `channels/` package.
+
+### Key Files
+- `graph/state.py` — Channel selection from type annotations
+- `channels/binop.py` — `BinaryOperatorAggregate` (reducer channels)
+- `channels/last_value.py` — `LastValue` (default non-reducer channel)
+- `_internal/_fields.py` — `get_field_default()`, field introspection utilities
+
+### BinaryOperatorAggregate Internals
+`__init__(self, typ, operator, default=...)` stores the reduction function
+and initializes `self.value = default if default is not EMPTY else typ()`.
+
+`update(values)` folds: `self.value = reduce(operator, values, self.value)`.
+
+`get()` returns the current accumulated value.
+
+The `typ()` call for default initialization means the type must be
+callable with zero arguments (e.g., `list`, `dict`, `int`). Custom types
+that require constructor arguments need an explicit `default` parameter.
+
+### Cross-subsystem Boundaries
+- Serializer checkpoints state values that include channel contents
+- `BinaryOperatorAggregate` stores accumulated values that the serializer
+  must handle (lists, dicts, custom types)
+- Agent 1 also works on state channels — the channel construction pipeline
+  is shared between your work and theirs
+
+
+# Agent 3 Specialization: Serializer + Streaming
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Enum Handling
+Standard `Enum` and `StrEnum` instances are routed through `_msgpack_default()`
+via the `OPT_PASSTHROUGH_ENUM` option. They are serialized with
+`EXT_CONSTRUCTOR_SINGLE_ARG = 0`: the ext payload is
+`(module, class_name, member_value)`.
+
+Reconstruction in `_msgpack_ext_hook()` imports the class and calls
+`cls(value)` to get the enum member back.
+
+The passthrough option is critical — without it, ormsgpack serializes enums
+as their raw value (string/int) and type identity is lost on deserialization.
+
+### Passthrough Options
+The serializer uses `OPT_PASSTHROUGH_DATACLASS | OPT_PASSTHROUGH_DATETIME |
+OPT_PASSTHROUGH_ENUM | OPT_PASSTHROUGH_UUID` to route these types through
+`_msgpack_default()` instead of ormsgpack's built-in handling.
+
+## Streaming Subsystem
+
+### Architecture
+Stream message handling lives in
+`libs/langgraph/langgraph/pregel/_messages.py`.
+
+### Key Files
+- `pregel/_messages.py` — `StreamMessagesHandler` callback handler
+- `pregel/loop.py` — Pregel execution loop (invokes handlers)
+- `types.py` — `StreamMode` enum and message type definitions
+
+### Message Emission Pipeline
+`StreamMessagesHandler` implements LangChain's `BaseCallbackHandler`.
+
+`_find_and_emit_messages(values)` is the core scanning method:
+1. Iterates over values in a state dict
+2. For each value that is a sequence (list/tuple), checks items
+3. Items that are `BaseMessage` instances get emitted via the `stream` callback
+4. Scanning depth is limited — only top-level state keys and their
+   immediate sequence contents are checked
+
+The `on_chain_end(outputs)` callback triggers `_find_and_emit_messages`
+after each node completes, extracting messages from the node's output state.
+
+### Cross-subsystem Boundaries
+- Serialized checkpoints include streaming state (which messages have been
+  emitted) for resume scenarios
+- Agent 4 also works on streaming — message deduplication depends on the
+  emission scanning logic you work on
+
+
+# Agent 4 Specialization: Serializer + Streaming
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Nested Type Reconstruction
+`_msgpack_ext_hook(code, data)` handles reconstruction for all ext codes:
+- `EXT_CONSTRUCTOR_SINGLE_ARG = 0` — `cls(arg)`
+- `EXT_CONSTRUCTOR_POS_ARGS = 1` — `cls(*args)`
+- `EXT_CONSTRUCTOR_KW_ARGS = 2` — `cls(**kwargs)`
+- `EXT_METHOD_SINGLE_ARG = 3` — `getattr(cls, method)(arg)`
+
+When types are nested (e.g., an Enum inside a dataclass inside a list),
+ormsgpack processes ext codes bottom-up. Inner objects are deserialized
+first, then the containing structure's ext hook receives already-
+reconstructed inner values.
+
+### Extension Mechanism
+`_msgpack_default(obj)` uses cascading `isinstance`/`hasattr` checks. Each
+handler wraps data in a tuple `(module_path, class_name, serialized_data)`
+and packs it with `ormsgpack.Ext(code, encoded_bytes)`.
+
+The tuple structure is consistent across all ext codes — the ext hook
+always unpacks `(module, name, data)` and uses `importlib.import_module`
+to locate the class.
+
+## Streaming Subsystem
+
+### Architecture
+Stream message handling lives in
+`libs/langgraph/langgraph/pregel/_messages.py`.
+
+### Key Files
+- `pregel/_messages.py` — `StreamMessagesHandler` callback handler
+- `pregel/loop.py` — Pregel execution loop (invokes handlers)
+- `types.py` — `StreamMode` enum and message type definitions
+
+### Deduplication via Seen Set
+`StreamMessagesHandler.__init__()` initializes `self.seen: set[str]` to
+track message IDs that have already been emitted.
+
+`on_chain_start(inputs)` populates the seen set from input state via
+`_state_values(inputs)`: it scans input values for `BaseMessage` instances
+and adds their `id` to `self.seen`.
+
+When `_find_and_emit_messages()` encounters a message, it checks
+`msg.id in self.seen` before emitting. This prevents re-emitting messages
+that were already in the state when the node started.
+
+The seen set is populated from **inputs** (start of node) and checked
+during **outputs** (end of node), creating a before/after diff.
+
+### Cross-subsystem Boundaries
+- Serialized checkpoints include streaming state for resume scenarios
+- Agent 3 also works on streaming — the emission logic that Agent 3
+  modifies feeds into the deduplication logic you work on
+
+
 # Feature Implementation Task
 
 Implement the following features in the pinned LangGraph repository. For each feature: explore the codebase, implement the fix, run the acceptance tests, and create a patch file.
@@ -153,17 +658,10 @@ preserving the original type information.
 
 ## Patch Instructions
 
-**CRITICAL:** Implement all features on the **same working tree**. Do NOT reset between features — each feature builds on the prior changes.
-
-After implementing **each** feature, snapshot your work:
-1. `git diff > data/patches/treatment-6/<FN>.patch`
-2. `git add -A`
-
-When **all** features are complete, save the combined patch:
-`git diff --staged > data/patches/treatment-6/cumulative.patch`
+**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-6/F2.patch`.
 
 
-Remember: after each feature, snapshot with `git diff > data/patches/treatment-6/<FN>.patch` then `git add -A`. When all features are done, save the combined patch with `git diff --staged > data/patches/treatment-6/cumulative.patch`. Start with F2.
+Remember: save your patch with `git diff > data/patches/treatment-6/F2.patch` when done.
 ````
 
 - [ ] Pasted opening prompt
@@ -185,6 +683,262 @@ claude
 Paste the following prompt:
 
 ````
+# Domain Context
+
+# Agent 1 Specialization: Serializer + State
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Extension Mechanism
+Custom types are handled via msgpack ext codes defined at module level:
+- `EXT_CONSTRUCTOR_SINGLE_ARG = 0` — constructor with 1 arg
+- `EXT_CONSTRUCTOR_POS_ARGS = 1` — constructor with *args
+- `EXT_CONSTRUCTOR_KW_ARGS = 2` — constructor with **kwargs
+- `EXT_METHOD_SINGLE_ARG = 3` — class method with 1 arg
+- `EXT_PYDANTIC_V1 = 4`, `EXT_PYDANTIC_V2 = 5`, `EXT_NUMPY_ARRAY = 6`
+
+### Adding New Types
+`_msgpack_default(obj)` uses cascading `isinstance`/`hasattr` checks. Each
+handler wraps data in a tuple `(module_path, class_name, serialized_data)`
+and packs it with `ormsgpack.Ext(code, encoded_bytes)`.
+
+`_msgpack_ext_hook(code, data)` reverses the process: unpacks the tuple,
+imports the class via `importlib.import_module`, and reconstructs the object.
+
+### Passthrough Options
+The serializer uses `OPT_PASSTHROUGH_DATACLASS | OPT_PASSTHROUGH_DATETIME |
+OPT_PASSTHROUGH_ENUM | OPT_PASSTHROUGH_UUID` to route these types through
+`_msgpack_default()` instead of ormsgpack's built-in handling.
+
+## State Subsystem
+
+### Architecture
+State management lives in `libs/langgraph/langgraph/graph/state.py` and
+the `channels/` package.
+
+### Key Files
+- `graph/state.py` — Channel selection from type annotations
+- `channels/binop.py` — `BinaryOperatorAggregate` (reducer channels)
+- `channels/last_value.py` — `LastValue` (default non-reducer channel)
+- `_internal/_fields.py` — `get_field_default()`, field introspection utilities
+
+### Channel Creation Pipeline
+1. `_get_channels(schema)` extracts type hints via `get_type_hints(schema, include_extras=True)`
+2. For each field, `_get_channel(name, typ)` decides the channel type:
+   - `_is_field_managed_value()` → managed value
+   - `_is_field_channel()` → explicit channel annotation
+   - `_is_field_binop()` → `BinaryOperatorAggregate` (has a reducer)
+   - Default → `LastValue`
+3. `_is_field_binop(typ)` inspects `Annotated` metadata for a callable with
+   a 2-parameter signature to use as the binary reduction operator
+
+### Cross-subsystem Boundaries
+- Serializer checkpoints state values that include channel contents
+- `BinaryOperatorAggregate` stores accumulated values that the serializer
+  must handle (lists, dicts, custom types)
+- Agent 2 also works on state channels — the channel construction pipeline
+  is shared between your work and theirs
+
+
+# Agent 2 Specialization: Serializer + State
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Pydantic Handling
+Pydantic models have dedicated ext codes:
+- `EXT_PYDANTIC_V1 = 4` — Pydantic V1 `BaseModel` instances
+- `EXT_PYDANTIC_V2 = 5` — Pydantic V2 `BaseModel` instances
+
+In `_msgpack_default(obj)`, a Pydantic V2 model is detected via
+`hasattr(obj, "model_dump")` and serialized as
+`(module, class_name, model_dump_dict)`. The ext hook reconstructs via
+`cls(**data)`.
+
+### Round-trip Pattern
+`dumps_typed(obj)` → ormsgpack with passthrough options → `_msgpack_default`
+for unhandled types → ext bytes.
+`loads_typed((type_tag, bytes))` → ormsgpack unpack → `_msgpack_ext_hook`
+for ext codes → reconstructed object.
+
+The `type_tag` is a string (`"msgpack"` or `"json"`) that selects the codec.
+
+## State Subsystem
+
+### Architecture
+State management lives in `libs/langgraph/langgraph/graph/state.py` and
+the `channels/` package.
+
+### Key Files
+- `graph/state.py` — Channel selection from type annotations
+- `channels/binop.py` — `BinaryOperatorAggregate` (reducer channels)
+- `channels/last_value.py` — `LastValue` (default non-reducer channel)
+- `_internal/_fields.py` — `get_field_default()`, field introspection utilities
+
+### BinaryOperatorAggregate Internals
+`__init__(self, typ, operator, default=...)` stores the reduction function
+and initializes `self.value = default if default is not EMPTY else typ()`.
+
+`update(values)` folds: `self.value = reduce(operator, values, self.value)`.
+
+`get()` returns the current accumulated value.
+
+The `typ()` call for default initialization means the type must be
+callable with zero arguments (e.g., `list`, `dict`, `int`). Custom types
+that require constructor arguments need an explicit `default` parameter.
+
+### Cross-subsystem Boundaries
+- Serializer checkpoints state values that include channel contents
+- `BinaryOperatorAggregate` stores accumulated values that the serializer
+  must handle (lists, dicts, custom types)
+- Agent 1 also works on state channels — the channel construction pipeline
+  is shared between your work and theirs
+
+
+# Agent 3 Specialization: Serializer + Streaming
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Enum Handling
+Standard `Enum` and `StrEnum` instances are routed through `_msgpack_default()`
+via the `OPT_PASSTHROUGH_ENUM` option. They are serialized with
+`EXT_CONSTRUCTOR_SINGLE_ARG = 0`: the ext payload is
+`(module, class_name, member_value)`.
+
+Reconstruction in `_msgpack_ext_hook()` imports the class and calls
+`cls(value)` to get the enum member back.
+
+The passthrough option is critical — without it, ormsgpack serializes enums
+as their raw value (string/int) and type identity is lost on deserialization.
+
+### Passthrough Options
+The serializer uses `OPT_PASSTHROUGH_DATACLASS | OPT_PASSTHROUGH_DATETIME |
+OPT_PASSTHROUGH_ENUM | OPT_PASSTHROUGH_UUID` to route these types through
+`_msgpack_default()` instead of ormsgpack's built-in handling.
+
+## Streaming Subsystem
+
+### Architecture
+Stream message handling lives in
+`libs/langgraph/langgraph/pregel/_messages.py`.
+
+### Key Files
+- `pregel/_messages.py` — `StreamMessagesHandler` callback handler
+- `pregel/loop.py` — Pregel execution loop (invokes handlers)
+- `types.py` — `StreamMode` enum and message type definitions
+
+### Message Emission Pipeline
+`StreamMessagesHandler` implements LangChain's `BaseCallbackHandler`.
+
+`_find_and_emit_messages(values)` is the core scanning method:
+1. Iterates over values in a state dict
+2. For each value that is a sequence (list/tuple), checks items
+3. Items that are `BaseMessage` instances get emitted via the `stream` callback
+4. Scanning depth is limited — only top-level state keys and their
+   immediate sequence contents are checked
+
+The `on_chain_end(outputs)` callback triggers `_find_and_emit_messages`
+after each node completes, extracting messages from the node's output state.
+
+### Cross-subsystem Boundaries
+- Serialized checkpoints include streaming state (which messages have been
+  emitted) for resume scenarios
+- Agent 4 also works on streaming — message deduplication depends on the
+  emission scanning logic you work on
+
+
+# Agent 4 Specialization: Serializer + Streaming
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Nested Type Reconstruction
+`_msgpack_ext_hook(code, data)` handles reconstruction for all ext codes:
+- `EXT_CONSTRUCTOR_SINGLE_ARG = 0` — `cls(arg)`
+- `EXT_CONSTRUCTOR_POS_ARGS = 1` — `cls(*args)`
+- `EXT_CONSTRUCTOR_KW_ARGS = 2` — `cls(**kwargs)`
+- `EXT_METHOD_SINGLE_ARG = 3` — `getattr(cls, method)(arg)`
+
+When types are nested (e.g., an Enum inside a dataclass inside a list),
+ormsgpack processes ext codes bottom-up. Inner objects are deserialized
+first, then the containing structure's ext hook receives already-
+reconstructed inner values.
+
+### Extension Mechanism
+`_msgpack_default(obj)` uses cascading `isinstance`/`hasattr` checks. Each
+handler wraps data in a tuple `(module_path, class_name, serialized_data)`
+and packs it with `ormsgpack.Ext(code, encoded_bytes)`.
+
+The tuple structure is consistent across all ext codes — the ext hook
+always unpacks `(module, name, data)` and uses `importlib.import_module`
+to locate the class.
+
+## Streaming Subsystem
+
+### Architecture
+Stream message handling lives in
+`libs/langgraph/langgraph/pregel/_messages.py`.
+
+### Key Files
+- `pregel/_messages.py` — `StreamMessagesHandler` callback handler
+- `pregel/loop.py` — Pregel execution loop (invokes handlers)
+- `types.py` — `StreamMode` enum and message type definitions
+
+### Deduplication via Seen Set
+`StreamMessagesHandler.__init__()` initializes `self.seen: set[str]` to
+track message IDs that have already been emitted.
+
+`on_chain_start(inputs)` populates the seen set from input state via
+`_state_values(inputs)`: it scans input values for `BaseMessage` instances
+and adds their `id` to `self.seen`.
+
+When `_find_and_emit_messages()` encounters a message, it checks
+`msg.id in self.seen` before emitting. This prevents re-emitting messages
+that were already in the state when the node started.
+
+The seen set is populated from **inputs** (start of node) and checked
+during **outputs** (end of node), creating a before/after diff.
+
+### Cross-subsystem Boundaries
+- Serialized checkpoints include streaming state for resume scenarios
+- Agent 3 also works on streaming — the emission logic that Agent 3
+  modifies feeds into the deduplication logic you work on
+
+
 # Feature Implementation Task
 
 Implement the following features in the pinned LangGraph repository. For each feature: explore the codebase, implement the fix, run the acceptance tests, and create a patch file.
@@ -202,17 +956,10 @@ attributes work correctly after deserialization.
 
 ## Patch Instructions
 
-**CRITICAL:** Implement all features on the **same working tree**. Do NOT reset between features — each feature builds on the prior changes.
-
-After implementing **each** feature, snapshot your work:
-1. `git diff > data/patches/treatment-6/<FN>.patch`
-2. `git add -A`
-
-When **all** features are complete, save the combined patch:
-`git diff --staged > data/patches/treatment-6/cumulative.patch`
+**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-6/F3.patch`.
 
 
-Remember: after each feature, snapshot with `git diff > data/patches/treatment-6/<FN>.patch` then `git add -A`. When all features are done, save the combined patch with `git diff --staged > data/patches/treatment-6/cumulative.patch`. Start with F3.
+Remember: save your patch with `git diff > data/patches/treatment-6/F3.patch` when done.
 ````
 
 - [ ] Pasted opening prompt
@@ -234,6 +981,262 @@ claude
 Paste the following prompt:
 
 ````
+# Domain Context
+
+# Agent 1 Specialization: Serializer + State
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Extension Mechanism
+Custom types are handled via msgpack ext codes defined at module level:
+- `EXT_CONSTRUCTOR_SINGLE_ARG = 0` — constructor with 1 arg
+- `EXT_CONSTRUCTOR_POS_ARGS = 1` — constructor with *args
+- `EXT_CONSTRUCTOR_KW_ARGS = 2` — constructor with **kwargs
+- `EXT_METHOD_SINGLE_ARG = 3` — class method with 1 arg
+- `EXT_PYDANTIC_V1 = 4`, `EXT_PYDANTIC_V2 = 5`, `EXT_NUMPY_ARRAY = 6`
+
+### Adding New Types
+`_msgpack_default(obj)` uses cascading `isinstance`/`hasattr` checks. Each
+handler wraps data in a tuple `(module_path, class_name, serialized_data)`
+and packs it with `ormsgpack.Ext(code, encoded_bytes)`.
+
+`_msgpack_ext_hook(code, data)` reverses the process: unpacks the tuple,
+imports the class via `importlib.import_module`, and reconstructs the object.
+
+### Passthrough Options
+The serializer uses `OPT_PASSTHROUGH_DATACLASS | OPT_PASSTHROUGH_DATETIME |
+OPT_PASSTHROUGH_ENUM | OPT_PASSTHROUGH_UUID` to route these types through
+`_msgpack_default()` instead of ormsgpack's built-in handling.
+
+## State Subsystem
+
+### Architecture
+State management lives in `libs/langgraph/langgraph/graph/state.py` and
+the `channels/` package.
+
+### Key Files
+- `graph/state.py` — Channel selection from type annotations
+- `channels/binop.py` — `BinaryOperatorAggregate` (reducer channels)
+- `channels/last_value.py` — `LastValue` (default non-reducer channel)
+- `_internal/_fields.py` — `get_field_default()`, field introspection utilities
+
+### Channel Creation Pipeline
+1. `_get_channels(schema)` extracts type hints via `get_type_hints(schema, include_extras=True)`
+2. For each field, `_get_channel(name, typ)` decides the channel type:
+   - `_is_field_managed_value()` → managed value
+   - `_is_field_channel()` → explicit channel annotation
+   - `_is_field_binop()` → `BinaryOperatorAggregate` (has a reducer)
+   - Default → `LastValue`
+3. `_is_field_binop(typ)` inspects `Annotated` metadata for a callable with
+   a 2-parameter signature to use as the binary reduction operator
+
+### Cross-subsystem Boundaries
+- Serializer checkpoints state values that include channel contents
+- `BinaryOperatorAggregate` stores accumulated values that the serializer
+  must handle (lists, dicts, custom types)
+- Agent 2 also works on state channels — the channel construction pipeline
+  is shared between your work and theirs
+
+
+# Agent 2 Specialization: Serializer + State
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Pydantic Handling
+Pydantic models have dedicated ext codes:
+- `EXT_PYDANTIC_V1 = 4` — Pydantic V1 `BaseModel` instances
+- `EXT_PYDANTIC_V2 = 5` — Pydantic V2 `BaseModel` instances
+
+In `_msgpack_default(obj)`, a Pydantic V2 model is detected via
+`hasattr(obj, "model_dump")` and serialized as
+`(module, class_name, model_dump_dict)`. The ext hook reconstructs via
+`cls(**data)`.
+
+### Round-trip Pattern
+`dumps_typed(obj)` → ormsgpack with passthrough options → `_msgpack_default`
+for unhandled types → ext bytes.
+`loads_typed((type_tag, bytes))` → ormsgpack unpack → `_msgpack_ext_hook`
+for ext codes → reconstructed object.
+
+The `type_tag` is a string (`"msgpack"` or `"json"`) that selects the codec.
+
+## State Subsystem
+
+### Architecture
+State management lives in `libs/langgraph/langgraph/graph/state.py` and
+the `channels/` package.
+
+### Key Files
+- `graph/state.py` — Channel selection from type annotations
+- `channels/binop.py` — `BinaryOperatorAggregate` (reducer channels)
+- `channels/last_value.py` — `LastValue` (default non-reducer channel)
+- `_internal/_fields.py` — `get_field_default()`, field introspection utilities
+
+### BinaryOperatorAggregate Internals
+`__init__(self, typ, operator, default=...)` stores the reduction function
+and initializes `self.value = default if default is not EMPTY else typ()`.
+
+`update(values)` folds: `self.value = reduce(operator, values, self.value)`.
+
+`get()` returns the current accumulated value.
+
+The `typ()` call for default initialization means the type must be
+callable with zero arguments (e.g., `list`, `dict`, `int`). Custom types
+that require constructor arguments need an explicit `default` parameter.
+
+### Cross-subsystem Boundaries
+- Serializer checkpoints state values that include channel contents
+- `BinaryOperatorAggregate` stores accumulated values that the serializer
+  must handle (lists, dicts, custom types)
+- Agent 1 also works on state channels — the channel construction pipeline
+  is shared between your work and theirs
+
+
+# Agent 3 Specialization: Serializer + Streaming
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Enum Handling
+Standard `Enum` and `StrEnum` instances are routed through `_msgpack_default()`
+via the `OPT_PASSTHROUGH_ENUM` option. They are serialized with
+`EXT_CONSTRUCTOR_SINGLE_ARG = 0`: the ext payload is
+`(module, class_name, member_value)`.
+
+Reconstruction in `_msgpack_ext_hook()` imports the class and calls
+`cls(value)` to get the enum member back.
+
+The passthrough option is critical — without it, ormsgpack serializes enums
+as their raw value (string/int) and type identity is lost on deserialization.
+
+### Passthrough Options
+The serializer uses `OPT_PASSTHROUGH_DATACLASS | OPT_PASSTHROUGH_DATETIME |
+OPT_PASSTHROUGH_ENUM | OPT_PASSTHROUGH_UUID` to route these types through
+`_msgpack_default()` instead of ormsgpack's built-in handling.
+
+## Streaming Subsystem
+
+### Architecture
+Stream message handling lives in
+`libs/langgraph/langgraph/pregel/_messages.py`.
+
+### Key Files
+- `pregel/_messages.py` — `StreamMessagesHandler` callback handler
+- `pregel/loop.py` — Pregel execution loop (invokes handlers)
+- `types.py` — `StreamMode` enum and message type definitions
+
+### Message Emission Pipeline
+`StreamMessagesHandler` implements LangChain's `BaseCallbackHandler`.
+
+`_find_and_emit_messages(values)` is the core scanning method:
+1. Iterates over values in a state dict
+2. For each value that is a sequence (list/tuple), checks items
+3. Items that are `BaseMessage` instances get emitted via the `stream` callback
+4. Scanning depth is limited — only top-level state keys and their
+   immediate sequence contents are checked
+
+The `on_chain_end(outputs)` callback triggers `_find_and_emit_messages`
+after each node completes, extracting messages from the node's output state.
+
+### Cross-subsystem Boundaries
+- Serialized checkpoints include streaming state (which messages have been
+  emitted) for resume scenarios
+- Agent 4 also works on streaming — message deduplication depends on the
+  emission scanning logic you work on
+
+
+# Agent 4 Specialization: Serializer + Streaming
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Nested Type Reconstruction
+`_msgpack_ext_hook(code, data)` handles reconstruction for all ext codes:
+- `EXT_CONSTRUCTOR_SINGLE_ARG = 0` — `cls(arg)`
+- `EXT_CONSTRUCTOR_POS_ARGS = 1` — `cls(*args)`
+- `EXT_CONSTRUCTOR_KW_ARGS = 2` — `cls(**kwargs)`
+- `EXT_METHOD_SINGLE_ARG = 3` — `getattr(cls, method)(arg)`
+
+When types are nested (e.g., an Enum inside a dataclass inside a list),
+ormsgpack processes ext codes bottom-up. Inner objects are deserialized
+first, then the containing structure's ext hook receives already-
+reconstructed inner values.
+
+### Extension Mechanism
+`_msgpack_default(obj)` uses cascading `isinstance`/`hasattr` checks. Each
+handler wraps data in a tuple `(module_path, class_name, serialized_data)`
+and packs it with `ormsgpack.Ext(code, encoded_bytes)`.
+
+The tuple structure is consistent across all ext codes — the ext hook
+always unpacks `(module, name, data)` and uses `importlib.import_module`
+to locate the class.
+
+## Streaming Subsystem
+
+### Architecture
+Stream message handling lives in
+`libs/langgraph/langgraph/pregel/_messages.py`.
+
+### Key Files
+- `pregel/_messages.py` — `StreamMessagesHandler` callback handler
+- `pregel/loop.py` — Pregel execution loop (invokes handlers)
+- `types.py` — `StreamMode` enum and message type definitions
+
+### Deduplication via Seen Set
+`StreamMessagesHandler.__init__()` initializes `self.seen: set[str]` to
+track message IDs that have already been emitted.
+
+`on_chain_start(inputs)` populates the seen set from input state via
+`_state_values(inputs)`: it scans input values for `BaseMessage` instances
+and adds their `id` to `self.seen`.
+
+When `_find_and_emit_messages()` encounters a message, it checks
+`msg.id in self.seen` before emitting. This prevents re-emitting messages
+that were already in the state when the node started.
+
+The seen set is populated from **inputs** (start of node) and checked
+during **outputs** (end of node), creating a before/after diff.
+
+### Cross-subsystem Boundaries
+- Serialized checkpoints include streaming state for resume scenarios
+- Agent 3 also works on streaming — the emission logic that Agent 3
+  modifies feeds into the deduplication logic you work on
+
+
 # Feature Implementation Task
 
 Implement the following features in the pinned LangGraph repository. For each feature: explore the codebase, implement the fix, run the acceptance tests, and create a patch file.
@@ -252,17 +1255,10 @@ the EXT_CONSTRUCTOR mechanism.
 
 ## Patch Instructions
 
-**CRITICAL:** Implement all features on the **same working tree**. Do NOT reset between features — each feature builds on the prior changes.
-
-After implementing **each** feature, snapshot your work:
-1. `git diff > data/patches/treatment-6/<FN>.patch`
-2. `git add -A`
-
-When **all** features are complete, save the combined patch:
-`git diff --staged > data/patches/treatment-6/cumulative.patch`
+**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-6/F4.patch`.
 
 
-Remember: after each feature, snapshot with `git diff > data/patches/treatment-6/<FN>.patch` then `git add -A`. When all features are done, save the combined patch with `git diff --staged > data/patches/treatment-6/cumulative.patch`. Start with F4.
+Remember: save your patch with `git diff > data/patches/treatment-6/F4.patch` when done.
 ````
 
 - [ ] Pasted opening prompt
@@ -284,6 +1280,262 @@ claude
 Paste the following prompt:
 
 ````
+# Domain Context
+
+# Agent 1 Specialization: Serializer + State
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Extension Mechanism
+Custom types are handled via msgpack ext codes defined at module level:
+- `EXT_CONSTRUCTOR_SINGLE_ARG = 0` — constructor with 1 arg
+- `EXT_CONSTRUCTOR_POS_ARGS = 1` — constructor with *args
+- `EXT_CONSTRUCTOR_KW_ARGS = 2` — constructor with **kwargs
+- `EXT_METHOD_SINGLE_ARG = 3` — class method with 1 arg
+- `EXT_PYDANTIC_V1 = 4`, `EXT_PYDANTIC_V2 = 5`, `EXT_NUMPY_ARRAY = 6`
+
+### Adding New Types
+`_msgpack_default(obj)` uses cascading `isinstance`/`hasattr` checks. Each
+handler wraps data in a tuple `(module_path, class_name, serialized_data)`
+and packs it with `ormsgpack.Ext(code, encoded_bytes)`.
+
+`_msgpack_ext_hook(code, data)` reverses the process: unpacks the tuple,
+imports the class via `importlib.import_module`, and reconstructs the object.
+
+### Passthrough Options
+The serializer uses `OPT_PASSTHROUGH_DATACLASS | OPT_PASSTHROUGH_DATETIME |
+OPT_PASSTHROUGH_ENUM | OPT_PASSTHROUGH_UUID` to route these types through
+`_msgpack_default()` instead of ormsgpack's built-in handling.
+
+## State Subsystem
+
+### Architecture
+State management lives in `libs/langgraph/langgraph/graph/state.py` and
+the `channels/` package.
+
+### Key Files
+- `graph/state.py` — Channel selection from type annotations
+- `channels/binop.py` — `BinaryOperatorAggregate` (reducer channels)
+- `channels/last_value.py` — `LastValue` (default non-reducer channel)
+- `_internal/_fields.py` — `get_field_default()`, field introspection utilities
+
+### Channel Creation Pipeline
+1. `_get_channels(schema)` extracts type hints via `get_type_hints(schema, include_extras=True)`
+2. For each field, `_get_channel(name, typ)` decides the channel type:
+   - `_is_field_managed_value()` → managed value
+   - `_is_field_channel()` → explicit channel annotation
+   - `_is_field_binop()` → `BinaryOperatorAggregate` (has a reducer)
+   - Default → `LastValue`
+3. `_is_field_binop(typ)` inspects `Annotated` metadata for a callable with
+   a 2-parameter signature to use as the binary reduction operator
+
+### Cross-subsystem Boundaries
+- Serializer checkpoints state values that include channel contents
+- `BinaryOperatorAggregate` stores accumulated values that the serializer
+  must handle (lists, dicts, custom types)
+- Agent 2 also works on state channels — the channel construction pipeline
+  is shared between your work and theirs
+
+
+# Agent 2 Specialization: Serializer + State
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Pydantic Handling
+Pydantic models have dedicated ext codes:
+- `EXT_PYDANTIC_V1 = 4` — Pydantic V1 `BaseModel` instances
+- `EXT_PYDANTIC_V2 = 5` — Pydantic V2 `BaseModel` instances
+
+In `_msgpack_default(obj)`, a Pydantic V2 model is detected via
+`hasattr(obj, "model_dump")` and serialized as
+`(module, class_name, model_dump_dict)`. The ext hook reconstructs via
+`cls(**data)`.
+
+### Round-trip Pattern
+`dumps_typed(obj)` → ormsgpack with passthrough options → `_msgpack_default`
+for unhandled types → ext bytes.
+`loads_typed((type_tag, bytes))` → ormsgpack unpack → `_msgpack_ext_hook`
+for ext codes → reconstructed object.
+
+The `type_tag` is a string (`"msgpack"` or `"json"`) that selects the codec.
+
+## State Subsystem
+
+### Architecture
+State management lives in `libs/langgraph/langgraph/graph/state.py` and
+the `channels/` package.
+
+### Key Files
+- `graph/state.py` — Channel selection from type annotations
+- `channels/binop.py` — `BinaryOperatorAggregate` (reducer channels)
+- `channels/last_value.py` — `LastValue` (default non-reducer channel)
+- `_internal/_fields.py` — `get_field_default()`, field introspection utilities
+
+### BinaryOperatorAggregate Internals
+`__init__(self, typ, operator, default=...)` stores the reduction function
+and initializes `self.value = default if default is not EMPTY else typ()`.
+
+`update(values)` folds: `self.value = reduce(operator, values, self.value)`.
+
+`get()` returns the current accumulated value.
+
+The `typ()` call for default initialization means the type must be
+callable with zero arguments (e.g., `list`, `dict`, `int`). Custom types
+that require constructor arguments need an explicit `default` parameter.
+
+### Cross-subsystem Boundaries
+- Serializer checkpoints state values that include channel contents
+- `BinaryOperatorAggregate` stores accumulated values that the serializer
+  must handle (lists, dicts, custom types)
+- Agent 1 also works on state channels — the channel construction pipeline
+  is shared between your work and theirs
+
+
+# Agent 3 Specialization: Serializer + Streaming
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Enum Handling
+Standard `Enum` and `StrEnum` instances are routed through `_msgpack_default()`
+via the `OPT_PASSTHROUGH_ENUM` option. They are serialized with
+`EXT_CONSTRUCTOR_SINGLE_ARG = 0`: the ext payload is
+`(module, class_name, member_value)`.
+
+Reconstruction in `_msgpack_ext_hook()` imports the class and calls
+`cls(value)` to get the enum member back.
+
+The passthrough option is critical — without it, ormsgpack serializes enums
+as their raw value (string/int) and type identity is lost on deserialization.
+
+### Passthrough Options
+The serializer uses `OPT_PASSTHROUGH_DATACLASS | OPT_PASSTHROUGH_DATETIME |
+OPT_PASSTHROUGH_ENUM | OPT_PASSTHROUGH_UUID` to route these types through
+`_msgpack_default()` instead of ormsgpack's built-in handling.
+
+## Streaming Subsystem
+
+### Architecture
+Stream message handling lives in
+`libs/langgraph/langgraph/pregel/_messages.py`.
+
+### Key Files
+- `pregel/_messages.py` — `StreamMessagesHandler` callback handler
+- `pregel/loop.py` — Pregel execution loop (invokes handlers)
+- `types.py` — `StreamMode` enum and message type definitions
+
+### Message Emission Pipeline
+`StreamMessagesHandler` implements LangChain's `BaseCallbackHandler`.
+
+`_find_and_emit_messages(values)` is the core scanning method:
+1. Iterates over values in a state dict
+2. For each value that is a sequence (list/tuple), checks items
+3. Items that are `BaseMessage` instances get emitted via the `stream` callback
+4. Scanning depth is limited — only top-level state keys and their
+   immediate sequence contents are checked
+
+The `on_chain_end(outputs)` callback triggers `_find_and_emit_messages`
+after each node completes, extracting messages from the node's output state.
+
+### Cross-subsystem Boundaries
+- Serialized checkpoints include streaming state (which messages have been
+  emitted) for resume scenarios
+- Agent 4 also works on streaming — message deduplication depends on the
+  emission scanning logic you work on
+
+
+# Agent 4 Specialization: Serializer + Streaming
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Nested Type Reconstruction
+`_msgpack_ext_hook(code, data)` handles reconstruction for all ext codes:
+- `EXT_CONSTRUCTOR_SINGLE_ARG = 0` — `cls(arg)`
+- `EXT_CONSTRUCTOR_POS_ARGS = 1` — `cls(*args)`
+- `EXT_CONSTRUCTOR_KW_ARGS = 2` — `cls(**kwargs)`
+- `EXT_METHOD_SINGLE_ARG = 3` — `getattr(cls, method)(arg)`
+
+When types are nested (e.g., an Enum inside a dataclass inside a list),
+ormsgpack processes ext codes bottom-up. Inner objects are deserialized
+first, then the containing structure's ext hook receives already-
+reconstructed inner values.
+
+### Extension Mechanism
+`_msgpack_default(obj)` uses cascading `isinstance`/`hasattr` checks. Each
+handler wraps data in a tuple `(module_path, class_name, serialized_data)`
+and packs it with `ormsgpack.Ext(code, encoded_bytes)`.
+
+The tuple structure is consistent across all ext codes — the ext hook
+always unpacks `(module, name, data)` and uses `importlib.import_module`
+to locate the class.
+
+## Streaming Subsystem
+
+### Architecture
+Stream message handling lives in
+`libs/langgraph/langgraph/pregel/_messages.py`.
+
+### Key Files
+- `pregel/_messages.py` — `StreamMessagesHandler` callback handler
+- `pregel/loop.py` — Pregel execution loop (invokes handlers)
+- `types.py` — `StreamMode` enum and message type definitions
+
+### Deduplication via Seen Set
+`StreamMessagesHandler.__init__()` initializes `self.seen: set[str]` to
+track message IDs that have already been emitted.
+
+`on_chain_start(inputs)` populates the seen set from input state via
+`_state_values(inputs)`: it scans input values for `BaseMessage` instances
+and adds their `id` to `self.seen`.
+
+When `_find_and_emit_messages()` encounters a message, it checks
+`msg.id in self.seen` before emitting. This prevents re-emitting messages
+that were already in the state when the node started.
+
+The seen set is populated from **inputs** (start of node) and checked
+during **outputs** (end of node), creating a before/after diff.
+
+### Cross-subsystem Boundaries
+- Serialized checkpoints include streaming state for resume scenarios
+- Agent 3 also works on streaming — the emission logic that Agent 3
+  modifies feeds into the deduplication logic you work on
+
+
 # Feature Implementation Task
 
 Implement the following features in the pinned LangGraph repository. For each feature: explore the codebase, implement the fix, run the acceptance tests, and create a patch file.
@@ -303,17 +1555,10 @@ for a callable with a 2-parameter signature.
 
 ## Patch Instructions
 
-**CRITICAL:** Implement all features on the **same working tree**. Do NOT reset between features — each feature builds on the prior changes.
-
-After implementing **each** feature, snapshot your work:
-1. `git diff > data/patches/treatment-6/<FN>.patch`
-2. `git add -A`
-
-When **all** features are complete, save the combined patch:
-`git diff --staged > data/patches/treatment-6/cumulative.patch`
+**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-6/F5.patch`.
 
 
-Remember: after each feature, snapshot with `git diff > data/patches/treatment-6/<FN>.patch` then `git add -A`. When all features are done, save the combined patch with `git diff --staged > data/patches/treatment-6/cumulative.patch`. Start with F5.
+Remember: save your patch with `git diff > data/patches/treatment-6/F5.patch` when done.
 ````
 
 - [ ] Pasted opening prompt
@@ -335,6 +1580,262 @@ claude
 Paste the following prompt:
 
 ````
+# Domain Context
+
+# Agent 1 Specialization: Serializer + State
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Extension Mechanism
+Custom types are handled via msgpack ext codes defined at module level:
+- `EXT_CONSTRUCTOR_SINGLE_ARG = 0` — constructor with 1 arg
+- `EXT_CONSTRUCTOR_POS_ARGS = 1` — constructor with *args
+- `EXT_CONSTRUCTOR_KW_ARGS = 2` — constructor with **kwargs
+- `EXT_METHOD_SINGLE_ARG = 3` — class method with 1 arg
+- `EXT_PYDANTIC_V1 = 4`, `EXT_PYDANTIC_V2 = 5`, `EXT_NUMPY_ARRAY = 6`
+
+### Adding New Types
+`_msgpack_default(obj)` uses cascading `isinstance`/`hasattr` checks. Each
+handler wraps data in a tuple `(module_path, class_name, serialized_data)`
+and packs it with `ormsgpack.Ext(code, encoded_bytes)`.
+
+`_msgpack_ext_hook(code, data)` reverses the process: unpacks the tuple,
+imports the class via `importlib.import_module`, and reconstructs the object.
+
+### Passthrough Options
+The serializer uses `OPT_PASSTHROUGH_DATACLASS | OPT_PASSTHROUGH_DATETIME |
+OPT_PASSTHROUGH_ENUM | OPT_PASSTHROUGH_UUID` to route these types through
+`_msgpack_default()` instead of ormsgpack's built-in handling.
+
+## State Subsystem
+
+### Architecture
+State management lives in `libs/langgraph/langgraph/graph/state.py` and
+the `channels/` package.
+
+### Key Files
+- `graph/state.py` — Channel selection from type annotations
+- `channels/binop.py` — `BinaryOperatorAggregate` (reducer channels)
+- `channels/last_value.py` — `LastValue` (default non-reducer channel)
+- `_internal/_fields.py` — `get_field_default()`, field introspection utilities
+
+### Channel Creation Pipeline
+1. `_get_channels(schema)` extracts type hints via `get_type_hints(schema, include_extras=True)`
+2. For each field, `_get_channel(name, typ)` decides the channel type:
+   - `_is_field_managed_value()` → managed value
+   - `_is_field_channel()` → explicit channel annotation
+   - `_is_field_binop()` → `BinaryOperatorAggregate` (has a reducer)
+   - Default → `LastValue`
+3. `_is_field_binop(typ)` inspects `Annotated` metadata for a callable with
+   a 2-parameter signature to use as the binary reduction operator
+
+### Cross-subsystem Boundaries
+- Serializer checkpoints state values that include channel contents
+- `BinaryOperatorAggregate` stores accumulated values that the serializer
+  must handle (lists, dicts, custom types)
+- Agent 2 also works on state channels — the channel construction pipeline
+  is shared between your work and theirs
+
+
+# Agent 2 Specialization: Serializer + State
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Pydantic Handling
+Pydantic models have dedicated ext codes:
+- `EXT_PYDANTIC_V1 = 4` — Pydantic V1 `BaseModel` instances
+- `EXT_PYDANTIC_V2 = 5` — Pydantic V2 `BaseModel` instances
+
+In `_msgpack_default(obj)`, a Pydantic V2 model is detected via
+`hasattr(obj, "model_dump")` and serialized as
+`(module, class_name, model_dump_dict)`. The ext hook reconstructs via
+`cls(**data)`.
+
+### Round-trip Pattern
+`dumps_typed(obj)` → ormsgpack with passthrough options → `_msgpack_default`
+for unhandled types → ext bytes.
+`loads_typed((type_tag, bytes))` → ormsgpack unpack → `_msgpack_ext_hook`
+for ext codes → reconstructed object.
+
+The `type_tag` is a string (`"msgpack"` or `"json"`) that selects the codec.
+
+## State Subsystem
+
+### Architecture
+State management lives in `libs/langgraph/langgraph/graph/state.py` and
+the `channels/` package.
+
+### Key Files
+- `graph/state.py` — Channel selection from type annotations
+- `channels/binop.py` — `BinaryOperatorAggregate` (reducer channels)
+- `channels/last_value.py` — `LastValue` (default non-reducer channel)
+- `_internal/_fields.py` — `get_field_default()`, field introspection utilities
+
+### BinaryOperatorAggregate Internals
+`__init__(self, typ, operator, default=...)` stores the reduction function
+and initializes `self.value = default if default is not EMPTY else typ()`.
+
+`update(values)` folds: `self.value = reduce(operator, values, self.value)`.
+
+`get()` returns the current accumulated value.
+
+The `typ()` call for default initialization means the type must be
+callable with zero arguments (e.g., `list`, `dict`, `int`). Custom types
+that require constructor arguments need an explicit `default` parameter.
+
+### Cross-subsystem Boundaries
+- Serializer checkpoints state values that include channel contents
+- `BinaryOperatorAggregate` stores accumulated values that the serializer
+  must handle (lists, dicts, custom types)
+- Agent 1 also works on state channels — the channel construction pipeline
+  is shared between your work and theirs
+
+
+# Agent 3 Specialization: Serializer + Streaming
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Enum Handling
+Standard `Enum` and `StrEnum` instances are routed through `_msgpack_default()`
+via the `OPT_PASSTHROUGH_ENUM` option. They are serialized with
+`EXT_CONSTRUCTOR_SINGLE_ARG = 0`: the ext payload is
+`(module, class_name, member_value)`.
+
+Reconstruction in `_msgpack_ext_hook()` imports the class and calls
+`cls(value)` to get the enum member back.
+
+The passthrough option is critical — without it, ormsgpack serializes enums
+as their raw value (string/int) and type identity is lost on deserialization.
+
+### Passthrough Options
+The serializer uses `OPT_PASSTHROUGH_DATACLASS | OPT_PASSTHROUGH_DATETIME |
+OPT_PASSTHROUGH_ENUM | OPT_PASSTHROUGH_UUID` to route these types through
+`_msgpack_default()` instead of ormsgpack's built-in handling.
+
+## Streaming Subsystem
+
+### Architecture
+Stream message handling lives in
+`libs/langgraph/langgraph/pregel/_messages.py`.
+
+### Key Files
+- `pregel/_messages.py` — `StreamMessagesHandler` callback handler
+- `pregel/loop.py` — Pregel execution loop (invokes handlers)
+- `types.py` — `StreamMode` enum and message type definitions
+
+### Message Emission Pipeline
+`StreamMessagesHandler` implements LangChain's `BaseCallbackHandler`.
+
+`_find_and_emit_messages(values)` is the core scanning method:
+1. Iterates over values in a state dict
+2. For each value that is a sequence (list/tuple), checks items
+3. Items that are `BaseMessage` instances get emitted via the `stream` callback
+4. Scanning depth is limited — only top-level state keys and their
+   immediate sequence contents are checked
+
+The `on_chain_end(outputs)` callback triggers `_find_and_emit_messages`
+after each node completes, extracting messages from the node's output state.
+
+### Cross-subsystem Boundaries
+- Serialized checkpoints include streaming state (which messages have been
+  emitted) for resume scenarios
+- Agent 4 also works on streaming — message deduplication depends on the
+  emission scanning logic you work on
+
+
+# Agent 4 Specialization: Serializer + Streaming
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Nested Type Reconstruction
+`_msgpack_ext_hook(code, data)` handles reconstruction for all ext codes:
+- `EXT_CONSTRUCTOR_SINGLE_ARG = 0` — `cls(arg)`
+- `EXT_CONSTRUCTOR_POS_ARGS = 1` — `cls(*args)`
+- `EXT_CONSTRUCTOR_KW_ARGS = 2` — `cls(**kwargs)`
+- `EXT_METHOD_SINGLE_ARG = 3` — `getattr(cls, method)(arg)`
+
+When types are nested (e.g., an Enum inside a dataclass inside a list),
+ormsgpack processes ext codes bottom-up. Inner objects are deserialized
+first, then the containing structure's ext hook receives already-
+reconstructed inner values.
+
+### Extension Mechanism
+`_msgpack_default(obj)` uses cascading `isinstance`/`hasattr` checks. Each
+handler wraps data in a tuple `(module_path, class_name, serialized_data)`
+and packs it with `ormsgpack.Ext(code, encoded_bytes)`.
+
+The tuple structure is consistent across all ext codes — the ext hook
+always unpacks `(module, name, data)` and uses `importlib.import_module`
+to locate the class.
+
+## Streaming Subsystem
+
+### Architecture
+Stream message handling lives in
+`libs/langgraph/langgraph/pregel/_messages.py`.
+
+### Key Files
+- `pregel/_messages.py` — `StreamMessagesHandler` callback handler
+- `pregel/loop.py` — Pregel execution loop (invokes handlers)
+- `types.py` — `StreamMode` enum and message type definitions
+
+### Deduplication via Seen Set
+`StreamMessagesHandler.__init__()` initializes `self.seen: set[str]` to
+track message IDs that have already been emitted.
+
+`on_chain_start(inputs)` populates the seen set from input state via
+`_state_values(inputs)`: it scans input values for `BaseMessage` instances
+and adds their `id` to `self.seen`.
+
+When `_find_and_emit_messages()` encounters a message, it checks
+`msg.id in self.seen` before emitting. This prevents re-emitting messages
+that were already in the state when the node started.
+
+The seen set is populated from **inputs** (start of node) and checked
+during **outputs** (end of node), creating a before/after diff.
+
+### Cross-subsystem Boundaries
+- Serialized checkpoints include streaming state for resume scenarios
+- Agent 3 also works on streaming — the emission logic that Agent 3
+  modifies feeds into the deduplication logic you work on
+
+
 # Feature Implementation Task
 
 Implement the following features in the pinned LangGraph repository. For each feature: explore the codebase, implement the fix, run the acceptance tests, and create a patch file.
@@ -353,17 +1854,10 @@ so that initial state matches the dataclass definition.
 
 ## Patch Instructions
 
-**CRITICAL:** Implement all features on the **same working tree**. Do NOT reset between features — each feature builds on the prior changes.
-
-After implementing **each** feature, snapshot your work:
-1. `git diff > data/patches/treatment-6/<FN>.patch`
-2. `git add -A`
-
-When **all** features are complete, save the combined patch:
-`git diff --staged > data/patches/treatment-6/cumulative.patch`
+**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-6/F6.patch`.
 
 
-Remember: after each feature, snapshot with `git diff > data/patches/treatment-6/<FN>.patch` then `git add -A`. When all features are done, save the combined patch with `git diff --staged > data/patches/treatment-6/cumulative.patch`. Start with F6.
+Remember: save your patch with `git diff > data/patches/treatment-6/F6.patch` when done.
 ````
 
 - [ ] Pasted opening prompt
@@ -385,6 +1879,262 @@ claude
 Paste the following prompt:
 
 ````
+# Domain Context
+
+# Agent 1 Specialization: Serializer + State
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Extension Mechanism
+Custom types are handled via msgpack ext codes defined at module level:
+- `EXT_CONSTRUCTOR_SINGLE_ARG = 0` — constructor with 1 arg
+- `EXT_CONSTRUCTOR_POS_ARGS = 1` — constructor with *args
+- `EXT_CONSTRUCTOR_KW_ARGS = 2` — constructor with **kwargs
+- `EXT_METHOD_SINGLE_ARG = 3` — class method with 1 arg
+- `EXT_PYDANTIC_V1 = 4`, `EXT_PYDANTIC_V2 = 5`, `EXT_NUMPY_ARRAY = 6`
+
+### Adding New Types
+`_msgpack_default(obj)` uses cascading `isinstance`/`hasattr` checks. Each
+handler wraps data in a tuple `(module_path, class_name, serialized_data)`
+and packs it with `ormsgpack.Ext(code, encoded_bytes)`.
+
+`_msgpack_ext_hook(code, data)` reverses the process: unpacks the tuple,
+imports the class via `importlib.import_module`, and reconstructs the object.
+
+### Passthrough Options
+The serializer uses `OPT_PASSTHROUGH_DATACLASS | OPT_PASSTHROUGH_DATETIME |
+OPT_PASSTHROUGH_ENUM | OPT_PASSTHROUGH_UUID` to route these types through
+`_msgpack_default()` instead of ormsgpack's built-in handling.
+
+## State Subsystem
+
+### Architecture
+State management lives in `libs/langgraph/langgraph/graph/state.py` and
+the `channels/` package.
+
+### Key Files
+- `graph/state.py` — Channel selection from type annotations
+- `channels/binop.py` — `BinaryOperatorAggregate` (reducer channels)
+- `channels/last_value.py` — `LastValue` (default non-reducer channel)
+- `_internal/_fields.py` — `get_field_default()`, field introspection utilities
+
+### Channel Creation Pipeline
+1. `_get_channels(schema)` extracts type hints via `get_type_hints(schema, include_extras=True)`
+2. For each field, `_get_channel(name, typ)` decides the channel type:
+   - `_is_field_managed_value()` → managed value
+   - `_is_field_channel()` → explicit channel annotation
+   - `_is_field_binop()` → `BinaryOperatorAggregate` (has a reducer)
+   - Default → `LastValue`
+3. `_is_field_binop(typ)` inspects `Annotated` metadata for a callable with
+   a 2-parameter signature to use as the binary reduction operator
+
+### Cross-subsystem Boundaries
+- Serializer checkpoints state values that include channel contents
+- `BinaryOperatorAggregate` stores accumulated values that the serializer
+  must handle (lists, dicts, custom types)
+- Agent 2 also works on state channels — the channel construction pipeline
+  is shared between your work and theirs
+
+
+# Agent 2 Specialization: Serializer + State
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Pydantic Handling
+Pydantic models have dedicated ext codes:
+- `EXT_PYDANTIC_V1 = 4` — Pydantic V1 `BaseModel` instances
+- `EXT_PYDANTIC_V2 = 5` — Pydantic V2 `BaseModel` instances
+
+In `_msgpack_default(obj)`, a Pydantic V2 model is detected via
+`hasattr(obj, "model_dump")` and serialized as
+`(module, class_name, model_dump_dict)`. The ext hook reconstructs via
+`cls(**data)`.
+
+### Round-trip Pattern
+`dumps_typed(obj)` → ormsgpack with passthrough options → `_msgpack_default`
+for unhandled types → ext bytes.
+`loads_typed((type_tag, bytes))` → ormsgpack unpack → `_msgpack_ext_hook`
+for ext codes → reconstructed object.
+
+The `type_tag` is a string (`"msgpack"` or `"json"`) that selects the codec.
+
+## State Subsystem
+
+### Architecture
+State management lives in `libs/langgraph/langgraph/graph/state.py` and
+the `channels/` package.
+
+### Key Files
+- `graph/state.py` — Channel selection from type annotations
+- `channels/binop.py` — `BinaryOperatorAggregate` (reducer channels)
+- `channels/last_value.py` — `LastValue` (default non-reducer channel)
+- `_internal/_fields.py` — `get_field_default()`, field introspection utilities
+
+### BinaryOperatorAggregate Internals
+`__init__(self, typ, operator, default=...)` stores the reduction function
+and initializes `self.value = default if default is not EMPTY else typ()`.
+
+`update(values)` folds: `self.value = reduce(operator, values, self.value)`.
+
+`get()` returns the current accumulated value.
+
+The `typ()` call for default initialization means the type must be
+callable with zero arguments (e.g., `list`, `dict`, `int`). Custom types
+that require constructor arguments need an explicit `default` parameter.
+
+### Cross-subsystem Boundaries
+- Serializer checkpoints state values that include channel contents
+- `BinaryOperatorAggregate` stores accumulated values that the serializer
+  must handle (lists, dicts, custom types)
+- Agent 1 also works on state channels — the channel construction pipeline
+  is shared between your work and theirs
+
+
+# Agent 3 Specialization: Serializer + Streaming
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Enum Handling
+Standard `Enum` and `StrEnum` instances are routed through `_msgpack_default()`
+via the `OPT_PASSTHROUGH_ENUM` option. They are serialized with
+`EXT_CONSTRUCTOR_SINGLE_ARG = 0`: the ext payload is
+`(module, class_name, member_value)`.
+
+Reconstruction in `_msgpack_ext_hook()` imports the class and calls
+`cls(value)` to get the enum member back.
+
+The passthrough option is critical — without it, ormsgpack serializes enums
+as their raw value (string/int) and type identity is lost on deserialization.
+
+### Passthrough Options
+The serializer uses `OPT_PASSTHROUGH_DATACLASS | OPT_PASSTHROUGH_DATETIME |
+OPT_PASSTHROUGH_ENUM | OPT_PASSTHROUGH_UUID` to route these types through
+`_msgpack_default()` instead of ormsgpack's built-in handling.
+
+## Streaming Subsystem
+
+### Architecture
+Stream message handling lives in
+`libs/langgraph/langgraph/pregel/_messages.py`.
+
+### Key Files
+- `pregel/_messages.py` — `StreamMessagesHandler` callback handler
+- `pregel/loop.py` — Pregel execution loop (invokes handlers)
+- `types.py` — `StreamMode` enum and message type definitions
+
+### Message Emission Pipeline
+`StreamMessagesHandler` implements LangChain's `BaseCallbackHandler`.
+
+`_find_and_emit_messages(values)` is the core scanning method:
+1. Iterates over values in a state dict
+2. For each value that is a sequence (list/tuple), checks items
+3. Items that are `BaseMessage` instances get emitted via the `stream` callback
+4. Scanning depth is limited — only top-level state keys and their
+   immediate sequence contents are checked
+
+The `on_chain_end(outputs)` callback triggers `_find_and_emit_messages`
+after each node completes, extracting messages from the node's output state.
+
+### Cross-subsystem Boundaries
+- Serialized checkpoints include streaming state (which messages have been
+  emitted) for resume scenarios
+- Agent 4 also works on streaming — message deduplication depends on the
+  emission scanning logic you work on
+
+
+# Agent 4 Specialization: Serializer + Streaming
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Nested Type Reconstruction
+`_msgpack_ext_hook(code, data)` handles reconstruction for all ext codes:
+- `EXT_CONSTRUCTOR_SINGLE_ARG = 0` — `cls(arg)`
+- `EXT_CONSTRUCTOR_POS_ARGS = 1` — `cls(*args)`
+- `EXT_CONSTRUCTOR_KW_ARGS = 2` — `cls(**kwargs)`
+- `EXT_METHOD_SINGLE_ARG = 3` — `getattr(cls, method)(arg)`
+
+When types are nested (e.g., an Enum inside a dataclass inside a list),
+ormsgpack processes ext codes bottom-up. Inner objects are deserialized
+first, then the containing structure's ext hook receives already-
+reconstructed inner values.
+
+### Extension Mechanism
+`_msgpack_default(obj)` uses cascading `isinstance`/`hasattr` checks. Each
+handler wraps data in a tuple `(module_path, class_name, serialized_data)`
+and packs it with `ormsgpack.Ext(code, encoded_bytes)`.
+
+The tuple structure is consistent across all ext codes — the ext hook
+always unpacks `(module, name, data)` and uses `importlib.import_module`
+to locate the class.
+
+## Streaming Subsystem
+
+### Architecture
+Stream message handling lives in
+`libs/langgraph/langgraph/pregel/_messages.py`.
+
+### Key Files
+- `pregel/_messages.py` — `StreamMessagesHandler` callback handler
+- `pregel/loop.py` — Pregel execution loop (invokes handlers)
+- `types.py` — `StreamMode` enum and message type definitions
+
+### Deduplication via Seen Set
+`StreamMessagesHandler.__init__()` initializes `self.seen: set[str]` to
+track message IDs that have already been emitted.
+
+`on_chain_start(inputs)` populates the seen set from input state via
+`_state_values(inputs)`: it scans input values for `BaseMessage` instances
+and adds their `id` to `self.seen`.
+
+When `_find_and_emit_messages()` encounters a message, it checks
+`msg.id in self.seen` before emitting. This prevents re-emitting messages
+that were already in the state when the node started.
+
+The seen set is populated from **inputs** (start of node) and checked
+during **outputs** (end of node), creating a before/after diff.
+
+### Cross-subsystem Boundaries
+- Serialized checkpoints include streaming state for resume scenarios
+- Agent 3 also works on streaming — the emission logic that Agent 3
+  modifies feeds into the deduplication logic you work on
+
+
 # Feature Implementation Task
 
 Implement the following features in the pinned LangGraph repository. For each feature: explore the codebase, implement the fix, run the acceptance tests, and create a patch file.
@@ -403,17 +2153,10 @@ The fix should recursively traverse nested structures.
 
 ## Patch Instructions
 
-**CRITICAL:** Implement all features on the **same working tree**. Do NOT reset between features — each feature builds on the prior changes.
-
-After implementing **each** feature, snapshot your work:
-1. `git diff > data/patches/treatment-6/<FN>.patch`
-2. `git add -A`
-
-When **all** features are complete, save the combined patch:
-`git diff --staged > data/patches/treatment-6/cumulative.patch`
+**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-6/F7.patch`.
 
 
-Remember: after each feature, snapshot with `git diff > data/patches/treatment-6/<FN>.patch` then `git add -A`. When all features are done, save the combined patch with `git diff --staged > data/patches/treatment-6/cumulative.patch`. Start with F7.
+Remember: save your patch with `git diff > data/patches/treatment-6/F7.patch` when done.
 ````
 
 - [ ] Pasted opening prompt
@@ -435,6 +2178,262 @@ claude
 Paste the following prompt:
 
 ````
+# Domain Context
+
+# Agent 1 Specialization: Serializer + State
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Extension Mechanism
+Custom types are handled via msgpack ext codes defined at module level:
+- `EXT_CONSTRUCTOR_SINGLE_ARG = 0` — constructor with 1 arg
+- `EXT_CONSTRUCTOR_POS_ARGS = 1` — constructor with *args
+- `EXT_CONSTRUCTOR_KW_ARGS = 2` — constructor with **kwargs
+- `EXT_METHOD_SINGLE_ARG = 3` — class method with 1 arg
+- `EXT_PYDANTIC_V1 = 4`, `EXT_PYDANTIC_V2 = 5`, `EXT_NUMPY_ARRAY = 6`
+
+### Adding New Types
+`_msgpack_default(obj)` uses cascading `isinstance`/`hasattr` checks. Each
+handler wraps data in a tuple `(module_path, class_name, serialized_data)`
+and packs it with `ormsgpack.Ext(code, encoded_bytes)`.
+
+`_msgpack_ext_hook(code, data)` reverses the process: unpacks the tuple,
+imports the class via `importlib.import_module`, and reconstructs the object.
+
+### Passthrough Options
+The serializer uses `OPT_PASSTHROUGH_DATACLASS | OPT_PASSTHROUGH_DATETIME |
+OPT_PASSTHROUGH_ENUM | OPT_PASSTHROUGH_UUID` to route these types through
+`_msgpack_default()` instead of ormsgpack's built-in handling.
+
+## State Subsystem
+
+### Architecture
+State management lives in `libs/langgraph/langgraph/graph/state.py` and
+the `channels/` package.
+
+### Key Files
+- `graph/state.py` — Channel selection from type annotations
+- `channels/binop.py` — `BinaryOperatorAggregate` (reducer channels)
+- `channels/last_value.py` — `LastValue` (default non-reducer channel)
+- `_internal/_fields.py` — `get_field_default()`, field introspection utilities
+
+### Channel Creation Pipeline
+1. `_get_channels(schema)` extracts type hints via `get_type_hints(schema, include_extras=True)`
+2. For each field, `_get_channel(name, typ)` decides the channel type:
+   - `_is_field_managed_value()` → managed value
+   - `_is_field_channel()` → explicit channel annotation
+   - `_is_field_binop()` → `BinaryOperatorAggregate` (has a reducer)
+   - Default → `LastValue`
+3. `_is_field_binop(typ)` inspects `Annotated` metadata for a callable with
+   a 2-parameter signature to use as the binary reduction operator
+
+### Cross-subsystem Boundaries
+- Serializer checkpoints state values that include channel contents
+- `BinaryOperatorAggregate` stores accumulated values that the serializer
+  must handle (lists, dicts, custom types)
+- Agent 2 also works on state channels — the channel construction pipeline
+  is shared between your work and theirs
+
+
+# Agent 2 Specialization: Serializer + State
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Pydantic Handling
+Pydantic models have dedicated ext codes:
+- `EXT_PYDANTIC_V1 = 4` — Pydantic V1 `BaseModel` instances
+- `EXT_PYDANTIC_V2 = 5` — Pydantic V2 `BaseModel` instances
+
+In `_msgpack_default(obj)`, a Pydantic V2 model is detected via
+`hasattr(obj, "model_dump")` and serialized as
+`(module, class_name, model_dump_dict)`. The ext hook reconstructs via
+`cls(**data)`.
+
+### Round-trip Pattern
+`dumps_typed(obj)` → ormsgpack with passthrough options → `_msgpack_default`
+for unhandled types → ext bytes.
+`loads_typed((type_tag, bytes))` → ormsgpack unpack → `_msgpack_ext_hook`
+for ext codes → reconstructed object.
+
+The `type_tag` is a string (`"msgpack"` or `"json"`) that selects the codec.
+
+## State Subsystem
+
+### Architecture
+State management lives in `libs/langgraph/langgraph/graph/state.py` and
+the `channels/` package.
+
+### Key Files
+- `graph/state.py` — Channel selection from type annotations
+- `channels/binop.py` — `BinaryOperatorAggregate` (reducer channels)
+- `channels/last_value.py` — `LastValue` (default non-reducer channel)
+- `_internal/_fields.py` — `get_field_default()`, field introspection utilities
+
+### BinaryOperatorAggregate Internals
+`__init__(self, typ, operator, default=...)` stores the reduction function
+and initializes `self.value = default if default is not EMPTY else typ()`.
+
+`update(values)` folds: `self.value = reduce(operator, values, self.value)`.
+
+`get()` returns the current accumulated value.
+
+The `typ()` call for default initialization means the type must be
+callable with zero arguments (e.g., `list`, `dict`, `int`). Custom types
+that require constructor arguments need an explicit `default` parameter.
+
+### Cross-subsystem Boundaries
+- Serializer checkpoints state values that include channel contents
+- `BinaryOperatorAggregate` stores accumulated values that the serializer
+  must handle (lists, dicts, custom types)
+- Agent 1 also works on state channels — the channel construction pipeline
+  is shared between your work and theirs
+
+
+# Agent 3 Specialization: Serializer + Streaming
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Enum Handling
+Standard `Enum` and `StrEnum` instances are routed through `_msgpack_default()`
+via the `OPT_PASSTHROUGH_ENUM` option. They are serialized with
+`EXT_CONSTRUCTOR_SINGLE_ARG = 0`: the ext payload is
+`(module, class_name, member_value)`.
+
+Reconstruction in `_msgpack_ext_hook()` imports the class and calls
+`cls(value)` to get the enum member back.
+
+The passthrough option is critical — without it, ormsgpack serializes enums
+as their raw value (string/int) and type identity is lost on deserialization.
+
+### Passthrough Options
+The serializer uses `OPT_PASSTHROUGH_DATACLASS | OPT_PASSTHROUGH_DATETIME |
+OPT_PASSTHROUGH_ENUM | OPT_PASSTHROUGH_UUID` to route these types through
+`_msgpack_default()` instead of ormsgpack's built-in handling.
+
+## Streaming Subsystem
+
+### Architecture
+Stream message handling lives in
+`libs/langgraph/langgraph/pregel/_messages.py`.
+
+### Key Files
+- `pregel/_messages.py` — `StreamMessagesHandler` callback handler
+- `pregel/loop.py` — Pregel execution loop (invokes handlers)
+- `types.py` — `StreamMode` enum and message type definitions
+
+### Message Emission Pipeline
+`StreamMessagesHandler` implements LangChain's `BaseCallbackHandler`.
+
+`_find_and_emit_messages(values)` is the core scanning method:
+1. Iterates over values in a state dict
+2. For each value that is a sequence (list/tuple), checks items
+3. Items that are `BaseMessage` instances get emitted via the `stream` callback
+4. Scanning depth is limited — only top-level state keys and their
+   immediate sequence contents are checked
+
+The `on_chain_end(outputs)` callback triggers `_find_and_emit_messages`
+after each node completes, extracting messages from the node's output state.
+
+### Cross-subsystem Boundaries
+- Serialized checkpoints include streaming state (which messages have been
+  emitted) for resume scenarios
+- Agent 4 also works on streaming — message deduplication depends on the
+  emission scanning logic you work on
+
+
+# Agent 4 Specialization: Serializer + Streaming
+
+## Serializer Subsystem
+
+### Architecture
+The checkpoint serializer lives in `libs/checkpoint/langgraph/checkpoint/serde/`.
+The primary class is `JsonPlusSerializer` in `jsonplus.py`.
+
+### Key Files
+- `jsonplus.py` — Core serializer with msgpack extension handling
+- `base.py` — `SerializerProtocol` (defines `dumps_typed`/`loads_typed`)
+- `types.py` — `SendProtocol`, `ChannelProtocol` type definitions
+
+### Nested Type Reconstruction
+`_msgpack_ext_hook(code, data)` handles reconstruction for all ext codes:
+- `EXT_CONSTRUCTOR_SINGLE_ARG = 0` — `cls(arg)`
+- `EXT_CONSTRUCTOR_POS_ARGS = 1` — `cls(*args)`
+- `EXT_CONSTRUCTOR_KW_ARGS = 2` — `cls(**kwargs)`
+- `EXT_METHOD_SINGLE_ARG = 3` — `getattr(cls, method)(arg)`
+
+When types are nested (e.g., an Enum inside a dataclass inside a list),
+ormsgpack processes ext codes bottom-up. Inner objects are deserialized
+first, then the containing structure's ext hook receives already-
+reconstructed inner values.
+
+### Extension Mechanism
+`_msgpack_default(obj)` uses cascading `isinstance`/`hasattr` checks. Each
+handler wraps data in a tuple `(module_path, class_name, serialized_data)`
+and packs it with `ormsgpack.Ext(code, encoded_bytes)`.
+
+The tuple structure is consistent across all ext codes — the ext hook
+always unpacks `(module, name, data)` and uses `importlib.import_module`
+to locate the class.
+
+## Streaming Subsystem
+
+### Architecture
+Stream message handling lives in
+`libs/langgraph/langgraph/pregel/_messages.py`.
+
+### Key Files
+- `pregel/_messages.py` — `StreamMessagesHandler` callback handler
+- `pregel/loop.py` — Pregel execution loop (invokes handlers)
+- `types.py` — `StreamMode` enum and message type definitions
+
+### Deduplication via Seen Set
+`StreamMessagesHandler.__init__()` initializes `self.seen: set[str]` to
+track message IDs that have already been emitted.
+
+`on_chain_start(inputs)` populates the seen set from input state via
+`_state_values(inputs)`: it scans input values for `BaseMessage` instances
+and adds their `id` to `self.seen`.
+
+When `_find_and_emit_messages()` encounters a message, it checks
+`msg.id in self.seen` before emitting. This prevents re-emitting messages
+that were already in the state when the node started.
+
+The seen set is populated from **inputs** (start of node) and checked
+during **outputs** (end of node), creating a before/after diff.
+
+### Cross-subsystem Boundaries
+- Serialized checkpoints include streaming state for resume scenarios
+- Agent 3 also works on streaming — the emission logic that Agent 3
+  modifies feeds into the deduplication logic you work on
+
+
 # Feature Implementation Task
 
 Implement the following features in the pinned LangGraph repository. For each feature: explore the codebase, implement the fix, run the acceptance tests, and create a patch file.
@@ -454,17 +2453,10 @@ structures for message IDs.
 
 ## Patch Instructions
 
-**CRITICAL:** Implement all features on the **same working tree**. Do NOT reset between features — each feature builds on the prior changes.
-
-After implementing **each** feature, snapshot your work:
-1. `git diff > data/patches/treatment-6/<FN>.patch`
-2. `git add -A`
-
-When **all** features are complete, save the combined patch:
-`git diff --staged > data/patches/treatment-6/cumulative.patch`
+**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-6/F8.patch`.
 
 
-Remember: after each feature, snapshot with `git diff > data/patches/treatment-6/<FN>.patch` then `git add -A`. When all features are done, save the combined patch with `git diff --staged > data/patches/treatment-6/cumulative.patch`. Start with F8.
+Remember: save your patch with `git diff > data/patches/treatment-6/F8.patch` when done.
 ````
 
 - [ ] Pasted opening prompt

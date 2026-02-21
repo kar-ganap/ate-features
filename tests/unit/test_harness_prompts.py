@@ -306,3 +306,63 @@ class TestCumulativePatchInstructions:
             treatment, features, scoring_mode="cumulative",
         )
         assert "same working tree" in prompt
+
+    def test_cumulative_vague_at_no_feature_assignments_reference(self) -> None:
+        """Vague AT treatments must NOT reference 'Feature Assignments section'."""
+        treatment = _get_treatment("2a")  # vague + AT
+        features = _get_features()
+        config = load_treatments()
+        prompt = get_opening_prompt(
+            treatment, features, scoring_mode="cumulative",
+            assignments=config.feature_assignments.explicit,
+        )
+        assert "Feature Assignments section" not in prompt
+
+    def test_cumulative_vague_at_lets_lead_decide(self) -> None:
+        """Vague AT treatments should tell lead to decide assignments."""
+        treatment = _get_treatment("2a")  # vague + autonomous
+        features = _get_features()
+        config = load_treatments()
+        prompt = get_opening_prompt(
+            treatment, features, scoring_mode="cumulative",
+            assignments=config.feature_assignments.explicit,
+        )
+        assert "as you see fit" in prompt.lower()
+
+    def test_cumulative_detailed_at_references_assignments_section(self) -> None:
+        """Detailed AT treatments SHOULD reference 'Feature Assignments section'."""
+        treatment = _get_treatment(1)  # detailed + AT
+        features = _get_features()
+        config = load_treatments()
+        prompt = get_opening_prompt(
+            treatment, features, scoring_mode="cumulative",
+            assignments=config.feature_assignments.explicit,
+        )
+        assert "Feature Assignments section" in prompt
+
+    def test_cumulative_per_feature_no_same_tree(self) -> None:
+        """Per-feature treatments should NOT say 'same working tree'."""
+        treatment = _get_treatment("0b")
+        features = _get_features()[:1]
+        prompt = get_opening_prompt(
+            treatment, features, scoring_mode="cumulative",
+        )
+        assert "same working tree" not in prompt
+
+    def test_cumulative_per_feature_no_cumulative_patch(self) -> None:
+        """Per-feature treatments should NOT reference cumulative.patch."""
+        treatment = _get_treatment("0b")
+        features = _get_features()[:1]
+        prompt = get_opening_prompt(
+            treatment, features, scoring_mode="cumulative",
+        )
+        assert "cumulative.patch" not in prompt
+
+    def test_cumulative_per_feature_has_feature_patch(self) -> None:
+        """Per-feature treatments should reference the single feature's patch."""
+        treatment = _get_treatment("0b")
+        features = _get_features()[:1]
+        prompt = get_opening_prompt(
+            treatment, features, scoring_mode="cumulative",
+        )
+        assert "F1.patch" in prompt

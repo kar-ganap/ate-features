@@ -288,3 +288,81 @@ class TestCumulativeRunbook:
             treatment, features, scoring_mode="cumulative",
         )
         assert "forgot to reset" not in runbook
+
+    def test_8x1_notes_template_has_8_agents(self) -> None:
+        """Treatment 5 (8x1) notes template should list 8 agents."""
+        treatment = _get_treatment(5)
+        features = _get_features()
+        config = load_treatments()
+        runbook = generate_runbook(
+            treatment, features,
+            assignments=config.feature_assignments.explicit,
+            scoring_mode="cumulative",
+        )
+        # Notes section should have 8 agent lines
+        notes_section = runbook[runbook.index("Write session notes"):]
+        assert "Agent 8: F8" in notes_section
+        # Each agent should have exactly one feature (no comma-separated)
+        assert "Agent 1: F1 (" in notes_section
+
+    def test_4x2_notes_template_has_4_agents(self) -> None:
+        """Treatment 1 (4x2) notes template should list 4 agents with 2 each."""
+        treatment = _get_treatment(1)
+        features = _get_features()
+        config = load_treatments()
+        runbook = generate_runbook(
+            treatment, features,
+            assignments=config.feature_assignments.explicit,
+            scoring_mode="cumulative",
+        )
+        notes_section = runbook[runbook.index("Write session notes"):]
+        assert "Agent 1: F1, F5" in notes_section
+        # Should NOT have Agent 5 in notes
+        assert "Agent 5" not in notes_section
+
+    def test_specialized_runbook_has_domain_context(self) -> None:
+        """Specialized treatments should include domain context in the prompt."""
+        from ate_features.config import load_specialization
+        context = load_specialization(1)
+        treatment = _get_treatment(7)
+        features = _get_features()
+        config = load_treatments()
+        runbook = generate_runbook(
+            treatment, features,
+            assignments=config.feature_assignments.explicit,
+            specialization_context=context,
+            scoring_mode="cumulative",
+        )
+        assert "Domain Context" in runbook
+
+    def test_encourage_runbook_has_nudge(self) -> None:
+        """Encourage treatments should include communication nudge."""
+        from ate_features.config import load_communication_nudges
+        nudges = load_communication_nudges()
+        nudge_text = nudges["encourage"]["system_context"]
+        treatment = _get_treatment("2a")
+        features = _get_features()
+        config = load_treatments()
+        runbook = generate_runbook(
+            treatment, features,
+            assignments=config.feature_assignments.explicit,
+            communication_nudge=nudge_text,
+            scoring_mode="cumulative",
+        )
+        assert "Communication guidance" in runbook
+
+    def test_generate_all_runbooks_wires_specialization(self) -> None:
+        """generate_all_runbooks should inject specialization for treatments 6,7,8."""
+        runbooks = generate_all_runbooks(scoring_mode="cumulative")
+        # Treatment 7 is specialized
+        assert "Domain Context" in runbooks[7]
+        # Treatment 0a is vanilla
+        assert "Domain Context" not in runbooks["0a"]
+
+    def test_generate_all_runbooks_wires_communication_nudge(self) -> None:
+        """generate_all_runbooks should inject nudge for encourage/discourage."""
+        runbooks = generate_all_runbooks(scoring_mode="cumulative")
+        # Treatment 2a is encourage
+        assert "Communication guidance" in runbooks["2a"]
+        # Treatment 1 is neutral (no nudge text)
+        assert "Communication guidance" not in runbooks[1]

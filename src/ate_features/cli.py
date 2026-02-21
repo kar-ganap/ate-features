@@ -132,7 +132,13 @@ def exec_runbook(
     mode: str = typer.Option("isolated", help="Scoring mode: isolated or cumulative"),
 ) -> None:
     """Generate and print a runbook for one treatment."""
-    from ate_features.config import load_features, load_treatments
+    from ate_features.config import (
+        load_communication_nudges,
+        load_features,
+        load_specialization,
+        load_treatments,
+    )
+    from ate_features.models import Specialization
     from ate_features.runbook import generate_runbook
 
     tid = _parse_tid(treatment_id)
@@ -140,10 +146,23 @@ def exec_runbook(
     treatment = next(t for t in config.treatments if t.id == tid)
     features = load_features().features
 
+    spec_context: str | None = None
+    if treatment.dimensions.specialization == Specialization.SPECIALIZED:
+        parts = [load_specialization(i) for i in range(1, 5)]
+        spec_context = "\n\n".join(parts)
+
+    nudge_text: str | None = None
+    nudges = load_communication_nudges()
+    comm = treatment.dimensions.communication
+    if comm is not None and comm.value != "neutral" and comm.value in nudges:
+        nudge_text = nudges[comm.value]["system_context"]
+
     runbook = generate_runbook(
         treatment,
         features,
         assignments=config.feature_assignments.explicit,
+        specialization_context=spec_context,
+        communication_nudge=nudge_text,
         scoring_mode=mode,
     )
     typer.echo(runbook)
@@ -151,14 +170,16 @@ def exec_runbook(
 
 @exec_app.command("runbooks")
 def exec_runbooks(
-    output_dir: str = "docs/runbooks",
+    output_dir: str = typer.Option("", help="Output directory (default: docs/runbooks or docs/runbooks-cumulative)"),
     mode: str = typer.Option("isolated", help="Scoring mode: isolated or cumulative"),
 ) -> None:
-    """Generate all 11 runbooks to docs/runbooks/."""
+    """Generate all 11 runbooks."""
     from pathlib import Path
 
     from ate_features.runbook import generate_all_runbooks, save_runbooks
 
+    if not output_dir:
+        output_dir = "docs/runbooks-cumulative" if mode == "cumulative" else "docs/runbooks"
     runbooks = generate_all_runbooks(scoring_mode=mode)
     paths = save_runbooks(runbooks, Path(output_dir))
     typer.echo(f"Generated {len(paths)} runbooks:")

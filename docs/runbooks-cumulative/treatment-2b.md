@@ -83,6 +83,17 @@ Copy and paste the **entire block below** as a single message:
 ---
 
 ````
+**Communication guidance:** Work independently on your assigned features. Focus on your own work.
+
+WASTEFUL communication (avoid this):
+- "Just wanted to let you know I'm starting on my feature now."
+- "How do I run the tests?"
+- "I finished my feature, how are you doing?"
+
+Refer to the codebase directly for answers. Report only to the team
+lead when done.
+
+
 # Feature Implementation Task
 
 Implement the following features in the LangGraph repository. Acceptance tests are in the `tests/acceptance/` directory.
@@ -100,7 +111,7 @@ Implement the following features in the LangGraph repository. Acceptance tests a
 
 **Create an agent team** to implement these features in parallel. Spawn one teammate per agent assignment above (4x2). Each teammate should work on their assigned features independently.
 
-Assign each teammate their features from the Feature Assignments section. Teammates can communicate with each other if they need to coordinate on shared files.
+Divide the features among your teammates as you see fit. Teammates can communicate with each other if they need to coordinate on shared files.
 
 Wait for all teammates to complete their tasks before creating the final combined patch.
 

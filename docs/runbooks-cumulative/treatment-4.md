@@ -100,7 +100,7 @@ Implement the following features in the LangGraph repository. Acceptance tests a
 
 **Create an agent team** to implement these features in parallel. Spawn one teammate per agent assignment above (4x2). Each teammate should work on their assigned features independently.
 
-Assign each teammate their features from the Feature Assignments section. Teammates can communicate with each other if they need to coordinate on shared files.
+Divide the features among your teammates as you see fit. Teammates can communicate with each other if they need to coordinate on shared files.
 
 Wait for all teammates to complete their tasks before creating the final combined patch.
 

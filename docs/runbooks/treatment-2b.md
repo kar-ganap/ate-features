@@ -83,6 +83,17 @@ Copy and paste the **entire block below** as a single message:
 ---
 
 ````
+**Communication guidance:** Work independently on your assigned features. Focus on your own work.
+
+WASTEFUL communication (avoid this):
+- "Just wanted to let you know I'm starting on my feature now."
+- "How do I run the tests?"
+- "I finished my feature, how are you doing?"
+
+Refer to the codebase directly for answers. Report only to the team
+lead when done.
+
+
 # Feature Implementation Task
 
 Implement the following features in the LangGraph repository. Acceptance tests are in the `tests/acceptance/` directory.

@@ -237,6 +237,9 @@ def _team_creation_instruction(
 ) -> str:
     """Generate explicit instruction for the lead to create an agent team."""
     ts = treatment.dimensions.team_size
+    is_detailed = (
+        treatment.dimensions.prompt_specificity == PromptSpecificity.DETAILED
+    )
     lines: list[str] = []
     lines.append("## Team Setup\n")
     lines.append(
@@ -245,13 +248,19 @@ def _team_creation_instruction(
         f"Each teammate should work on their assigned features independently."
     )
     lines.append("")
-    if assignments:
+    if is_detailed and assignments:
         lines.append(
             "Assign each teammate their features from the Feature Assignments "
             "section. Teammates can communicate with each other if they need "
             "to coordinate on shared files."
         )
-        lines.append("")
+    else:
+        lines.append(
+            "Divide the features among your teammates as you see fit. "
+            "Teammates can communicate with each other if they need "
+            "to coordinate on shared files."
+        )
+    lines.append("")
     lines.append(
         "Wait for all teammates to complete their tasks before creating "
         "the final combined patch."
@@ -317,10 +326,18 @@ def _patch_instructions_cumulative(
     """Generate cumulative patch instructions (no resets between features)."""
     tid = treatment.id
     at = uses_agent_teams(treatment)
+    per_feature = is_per_feature_treatment(treatment)
     lines: list[str] = []
     lines.append("## Patch Instructions\n")
 
-    if at:
+    if per_feature:
+        fid = features[0].id if features else "FN"
+        lines.append(
+            f"**CRITICAL:** After implementing this feature, save your "
+            f"patch by running "
+            f"`git diff > data/patches/treatment-{tid}/{fid}.patch`."
+        )
+    elif at:
         lines.append(
             "**CRITICAL:** Implement all assigned features. "
             "When **all** features are complete, save the combined patch:\n"
@@ -353,6 +370,15 @@ def _patch_reminder_cumulative(
     """Closing reminder for cumulative patch protocol."""
     tid = treatment.id
     at = uses_agent_teams(treatment)
+    per_feature = is_per_feature_treatment(treatment)
+
+    if per_feature:
+        fid = features[0].id if features else "FN"
+        return (
+            f"\nRemember: save your patch with "
+            f"`git diff > data/patches/treatment-{tid}/{fid}.patch` "
+            f"when done."
+        )
 
     if at:
         return (

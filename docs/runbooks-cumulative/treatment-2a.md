@@ -83,6 +83,21 @@ Copy and paste the **entire block below** as a single message:
 ---
 
 ````
+**Communication guidance:** You are part of a team working on multiple features in the LangGraph
+codebase. Communication with teammates is valuable.
+
+USEFUL communication (do this):
+- "I found that _msgpack_ext_hook() uses EXT_CONSTRUCTOR codes 100-110.
+  If you're also modifying this function, avoid those codes."
+- "The channel init code in _fields.py calls get_field_default() which
+  doesn't handle Pydantic aliases. This affects both our features."
+- "Warning: graph compilation validates edge targets in _validate.py.
+  If you're adding routing targets, update the whitelist."
+
+Share findings about shared code paths. Warn about side effects. Ask
+specific questions when blocked.
+
+
 # Feature Implementation Task
 
 Implement the following features in the LangGraph repository. Acceptance tests are in the `tests/acceptance/` directory.
@@ -100,7 +115,7 @@ Implement the following features in the LangGraph repository. Acceptance tests a
 
 **Create an agent team** to implement these features in parallel. Spawn one teammate per agent assignment above (4x2). Each teammate should work on their assigned features independently.
 
-Assign each teammate their features from the Feature Assignments section. Teammates can communicate with each other if they need to coordinate on shared files.
+Divide the features among your teammates as you see fit. Teammates can communicate with each other if they need to coordinate on shared files.
 
 Wait for all teammates to complete their tasks before creating the final combined patch.
 

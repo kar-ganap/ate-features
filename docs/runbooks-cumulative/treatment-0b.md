@@ -103,17 +103,10 @@ multi-index structures.
 
 ## Patch Instructions
 
-**CRITICAL:** Implement all features on the **same working tree**. Do NOT reset between features — each feature builds on the prior changes.
-
-After implementing **each** feature, snapshot your work:
-1. `git diff > data/patches/treatment-0b/<FN>.patch`
-2. `git add -A`
-
-When **all** features are complete, save the combined patch:
-`git diff --staged > data/patches/treatment-0b/cumulative.patch`
+**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-0b/F1.patch`.
 
 
-Remember: after each feature, snapshot with `git diff > data/patches/treatment-0b/<FN>.patch` then `git add -A`. When all features are done, save the combined patch with `git diff --staged > data/patches/treatment-0b/cumulative.patch`. Start with F1.
+Remember: save your patch with `git diff > data/patches/treatment-0b/F1.patch` when done.
 ````
 
 - [ ] Pasted opening prompt
@@ -153,17 +146,10 @@ preserving the original type information.
 
 ## Patch Instructions
 
-**CRITICAL:** Implement all features on the **same working tree**. Do NOT reset between features — each feature builds on the prior changes.
-
-After implementing **each** feature, snapshot your work:
-1. `git diff > data/patches/treatment-0b/<FN>.patch`
-2. `git add -A`
-
-When **all** features are complete, save the combined patch:
-`git diff --staged > data/patches/treatment-0b/cumulative.patch`
+**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-0b/F2.patch`.
 
 
-Remember: after each feature, snapshot with `git diff > data/patches/treatment-0b/<FN>.patch` then `git add -A`. When all features are done, save the combined patch with `git diff --staged > data/patches/treatment-0b/cumulative.patch`. Start with F2.
+Remember: save your patch with `git diff > data/patches/treatment-0b/F2.patch` when done.
 ````
 
 - [ ] Pasted opening prompt
@@ -202,17 +188,10 @@ attributes work correctly after deserialization.
 
 ## Patch Instructions
 
-**CRITICAL:** Implement all features on the **same working tree**. Do NOT reset between features — each feature builds on the prior changes.
-
-After implementing **each** feature, snapshot your work:
-1. `git diff > data/patches/treatment-0b/<FN>.patch`
-2. `git add -A`
-
-When **all** features are complete, save the combined patch:
-`git diff --staged > data/patches/treatment-0b/cumulative.patch`
+**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-0b/F3.patch`.
 
 
-Remember: after each feature, snapshot with `git diff > data/patches/treatment-0b/<FN>.patch` then `git add -A`. When all features are done, save the combined patch with `git diff --staged > data/patches/treatment-0b/cumulative.patch`. Start with F3.
+Remember: save your patch with `git diff > data/patches/treatment-0b/F3.patch` when done.
 ````
 
 - [ ] Pasted opening prompt
@@ -252,17 +231,10 @@ the EXT_CONSTRUCTOR mechanism.
 
 ## Patch Instructions
 
-**CRITICAL:** Implement all features on the **same working tree**. Do NOT reset between features — each feature builds on the prior changes.
-
-After implementing **each** feature, snapshot your work:
-1. `git diff > data/patches/treatment-0b/<FN>.patch`
-2. `git add -A`
-
-When **all** features are complete, save the combined patch:
-`git diff --staged > data/patches/treatment-0b/cumulative.patch`
+**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-0b/F4.patch`.
 
 
-Remember: after each feature, snapshot with `git diff > data/patches/treatment-0b/<FN>.patch` then `git add -A`. When all features are done, save the combined patch with `git diff --staged > data/patches/treatment-0b/cumulative.patch`. Start with F4.
+Remember: save your patch with `git diff > data/patches/treatment-0b/F4.patch` when done.
 ````
 
 - [ ] Pasted opening prompt
@@ -303,17 +275,10 @@ for a callable with a 2-parameter signature.
 
 ## Patch Instructions
 
-**CRITICAL:** Implement all features on the **same working tree**. Do NOT reset between features — each feature builds on the prior changes.
-
-After implementing **each** feature, snapshot your work:
-1. `git diff > data/patches/treatment-0b/<FN>.patch`
-2. `git add -A`
-
-When **all** features are complete, save the combined patch:
-`git diff --staged > data/patches/treatment-0b/cumulative.patch`
+**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-0b/F5.patch`.
 
 
-Remember: after each feature, snapshot with `git diff > data/patches/treatment-0b/<FN>.patch` then `git add -A`. When all features are done, save the combined patch with `git diff --staged > data/patches/treatment-0b/cumulative.patch`. Start with F5.
+Remember: save your patch with `git diff > data/patches/treatment-0b/F5.patch` when done.
 ````
 
 - [ ] Pasted opening prompt
@@ -353,17 +318,10 @@ so that initial state matches the dataclass definition.
 
 ## Patch Instructions
 
-**CRITICAL:** Implement all features on the **same working tree**. Do NOT reset between features — each feature builds on the prior changes.
-
-After implementing **each** feature, snapshot your work:
-1. `git diff > data/patches/treatment-0b/<FN>.patch`
-2. `git add -A`
-
-When **all** features are complete, save the combined patch:
-`git diff --staged > data/patches/treatment-0b/cumulative.patch`
+**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-0b/F6.patch`.
 
 
-Remember: after each feature, snapshot with `git diff > data/patches/treatment-0b/<FN>.patch` then `git add -A`. When all features are done, save the combined patch with `git diff --staged > data/patches/treatment-0b/cumulative.patch`. Start with F6.
+Remember: save your patch with `git diff > data/patches/treatment-0b/F6.patch` when done.
 ````
 
 - [ ] Pasted opening prompt
@@ -403,17 +361,10 @@ The fix should recursively traverse nested structures.
 
 ## Patch Instructions
 
-**CRITICAL:** Implement all features on the **same working tree**. Do NOT reset between features — each feature builds on the prior changes.
-
-After implementing **each** feature, snapshot your work:
-1. `git diff > data/patches/treatment-0b/<FN>.patch`
-2. `git add -A`
-
-When **all** features are complete, save the combined patch:
-`git diff --staged > data/patches/treatment-0b/cumulative.patch`
+**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-0b/F7.patch`.
 
 
-Remember: after each feature, snapshot with `git diff > data/patches/treatment-0b/<FN>.patch` then `git add -A`. When all features are done, save the combined patch with `git diff --staged > data/patches/treatment-0b/cumulative.patch`. Start with F7.
+Remember: save your patch with `git diff > data/patches/treatment-0b/F7.patch` when done.
 ````
 
 - [ ] Pasted opening prompt
@@ -454,17 +405,10 @@ structures for message IDs.
 
 ## Patch Instructions
 
-**CRITICAL:** Implement all features on the **same working tree**. Do NOT reset between features — each feature builds on the prior changes.
-
-After implementing **each** feature, snapshot your work:
-1. `git diff > data/patches/treatment-0b/<FN>.patch`
-2. `git add -A`
-
-When **all** features are complete, save the combined patch:
-`git diff --staged > data/patches/treatment-0b/cumulative.patch`
+**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-0b/F8.patch`.
 
 
-Remember: after each feature, snapshot with `git diff > data/patches/treatment-0b/<FN>.patch` then `git add -A`. When all features are done, save the combined patch with `git diff --staged > data/patches/treatment-0b/cumulative.patch`. Start with F8.
+Remember: save your patch with `git diff > data/patches/treatment-0b/F8.patch` when done.
 ````
 
 - [ ] Pasted opening prompt

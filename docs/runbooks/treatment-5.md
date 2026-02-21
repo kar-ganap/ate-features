@@ -186,10 +186,14 @@ structures for message IDs.
 
 ## Feature Assignments
 
-- **Agent 1:** F1, F5
-- **Agent 2:** F2, F6
-- **Agent 3:** F3, F7
-- **Agent 4:** F4, F8
+- **Agent 1:** F1
+- **Agent 2:** F2
+- **Agent 3:** F3
+- **Agent 4:** F4
+- **Agent 5:** F5
+- **Agent 6:** F6
+- **Agent 7:** F7
+- **Agent 8:** F8
 
 ## Patch Instructions
 
@@ -352,10 +356,14 @@ Record observations in `data/transcripts/treatment-5/notes.md`. Use this format:
 # Notes: Treatment 5 — Max Parallelism
 
 ## Assignment Confirmation
-- Agent 1: F1, F5 (confirmed by lead)
-- Agent 2: F2, F6 (confirmed by lead)
-- Agent 3: F3, F7 (confirmed by lead)
-- Agent 4: F4, F8 (confirmed by lead)
+- Agent 1: F1 (confirmed by lead)
+- Agent 2: F2 (confirmed by lead)
+- Agent 3: F3 (confirmed by lead)
+- Agent 4: F4 (confirmed by lead)
+- Agent 5: F5 (confirmed by lead)
+- Agent 6: F6 (confirmed by lead)
+- Agent 7: F7 (confirmed by lead)
+- Agent 8: F8 (confirmed by lead)
 
 ## Timeline
 - HH:MM Session started
