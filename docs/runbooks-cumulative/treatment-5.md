@@ -193,17 +193,11 @@ structures for message IDs.
 
 ## Patch Instructions
 
-**CRITICAL:** Implement all features on the **same working tree**. Do NOT reset between features — each feature builds on the prior changes.
-
-After implementing **each** feature, snapshot your work:
-1. `git diff > data/patches/treatment-5/<FN>.patch`
-2. `git add -A`
-
-When **all** features are complete, save the combined patch:
-`git diff --staged > data/patches/treatment-5/cumulative.patch`
+**CRITICAL:** Implement all assigned features. When **all** features are complete, save the combined patch:
+`git diff > data/patches/treatment-5/cumulative.patch`
 
 
-Remember: after each feature, snapshot with `git diff > data/patches/treatment-5/<FN>.patch` then `git add -A`. When all features are done, save the combined patch with `git diff --staged > data/patches/treatment-5/cumulative.patch`. Start with F1.
+Remember: when all features are done, save the combined patch with `git diff > data/patches/treatment-5/cumulative.patch`. Start with F1.
 ````
 
 ---

@@ -277,22 +277,33 @@ def _patch_instructions_cumulative(
 ) -> str:
     """Generate cumulative patch instructions (no resets between features)."""
     tid = treatment.id
+    at = uses_agent_teams(treatment)
     lines: list[str] = []
     lines.append("## Patch Instructions\n")
-    lines.append(
-        "**CRITICAL:** Implement all features on the **same working tree**. "
-        "Do NOT reset between features — each feature builds on the prior "
-        "changes.\n"
-    )
-    lines.append(
-        f"After implementing **each** feature, snapshot your work:\n"
-        f"1. `git diff > data/patches/treatment-{tid}/<FN>.patch`\n"
-        f"2. `git add -A`\n"
-    )
-    lines.append(
-        f"When **all** features are complete, save the combined patch:\n"
-        f"`git diff --staged > data/patches/treatment-{tid}/cumulative.patch`"
-    )
+
+    if at:
+        lines.append(
+            "**CRITICAL:** Implement all assigned features. "
+            "When **all** features are complete, save the combined patch:\n"
+            f"`git diff > data/patches/treatment-{tid}/cumulative.patch`"
+        )
+    else:
+        lines.append(
+            "**CRITICAL:** Implement all features on the **same working tree**. "
+            "Do NOT reset between features — each feature builds on the prior "
+            "changes.\n"
+        )
+        lines.append(
+            f"After implementing **each** feature, snapshot your work:\n"
+            f"1. `git diff > data/patches/treatment-{tid}/<FN>.patch`\n"
+            f"2. `git add -A`\n"
+        )
+        lines.append(
+            f"When **all** features are complete, save the combined patch:\n"
+            f"`git diff --staged > data/patches/treatment-{tid}/"
+            f"cumulative.patch`"
+        )
+
     lines.append("")
     return "\n".join(lines)
 
@@ -302,6 +313,16 @@ def _patch_reminder_cumulative(
 ) -> str:
     """Closing reminder for cumulative patch protocol."""
     tid = treatment.id
+    at = uses_agent_teams(treatment)
+
+    if at:
+        return (
+            f"\nRemember: when all features are done, save the combined "
+            f"patch with "
+            f"`git diff > data/patches/treatment-{tid}/cumulative.patch`. "
+            f"Start with {features[0].id}."
+        )
+
     return (
         f"\nRemember: after each feature, snapshot with "
         f"`git diff > data/patches/treatment-{tid}/<FN>.patch` "

@@ -291,7 +291,7 @@ class TestT3Quality:
             items: Annotated[list[str], operator.add] = field(default_factory=lambda: ["start"])
 
         def route(state: State) -> str:
-            return END if "start" in state["items"] else "work"
+            return END if "start" in state.items else "work"
 
         def work(state: State) -> dict:
             return {"items": ["should_not_run"]}

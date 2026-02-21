@@ -232,3 +232,45 @@ class TestCumulativePatchInstructions:
             treatment, features, scoring_mode="cumulative",
         )
         assert "treatment-1" in prompt
+
+    def test_cumulative_at_no_same_tree_constraint(self) -> None:
+        """AT treatments should NOT say 'same working tree'."""
+        treatment = _get_treatment(1)
+        features = _get_features()
+        config = load_treatments()
+        prompt = get_opening_prompt(
+            treatment, features, scoring_mode="cumulative",
+            assignments=config.feature_assignments.explicit,
+        )
+        assert "same working tree" not in prompt
+
+    def test_cumulative_at_has_combined_patch(self) -> None:
+        """AT treatments should still request a combined patch."""
+        treatment = _get_treatment(1)
+        features = _get_features()
+        config = load_treatments()
+        prompt = get_opening_prompt(
+            treatment, features, scoring_mode="cumulative",
+            assignments=config.feature_assignments.explicit,
+        )
+        assert "cumulative.patch" in prompt
+
+    def test_cumulative_at_no_git_add(self) -> None:
+        """AT treatments should NOT tell agents to git add -A between features."""
+        treatment = _get_treatment(1)
+        features = _get_features()
+        config = load_treatments()
+        prompt = get_opening_prompt(
+            treatment, features, scoring_mode="cumulative",
+            assignments=config.feature_assignments.explicit,
+        )
+        assert "git add -A" not in prompt
+
+    def test_cumulative_solo_has_same_tree_constraint(self) -> None:
+        """Solo treatments (0a) should still say 'same working tree'."""
+        treatment = _get_treatment("0a")
+        features = _get_features()
+        prompt = get_opening_prompt(
+            treatment, features, scoring_mode="cumulative",
+        )
+        assert "same working tree" in prompt

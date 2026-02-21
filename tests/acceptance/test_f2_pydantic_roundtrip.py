@@ -230,7 +230,7 @@ class TestT4Smoke:
             model: NestedOuter
 
         def step_1(state: State) -> dict:
-            inner = SimpleModel(name="from_step1", value=42)
+            inner = SimpleModel(name="from_step1", count=42)
             return {
                 "log": ["step_1"],
                 "model": NestedOuter(inner=inner, label="outer"),
@@ -251,7 +251,7 @@ class TestT4Smoke:
         config = {"configurable": {"thread_id": "f2-smoke"}}
 
         init_model = NestedOuter(
-            inner=SimpleModel(name="init", value=0), label="init"
+            inner=SimpleModel(name="init", count=0), label="init"
         )
         result = compiled.invoke(
             {"log": [], "model": init_model}, config=config
