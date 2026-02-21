@@ -1,46 +1,90 @@
 # Runbook: Treatment 6 — Specialized Swim Lanes
 
+**Treatment**: 6 (Specialized Swim Lanes)
+**Description**: 8 separate interactive Claude Code sessions, one per feature. Detailed prompts with full specs.
+**Expected Duration**: 2-6 hours
+**Agent Teams**: OFF
+
 | Dimension | Value |
 |-----------|-------|
-| Decomposition | explicit |
+| Decomposition | **Explicit** |
 | Prompt specificity | detailed |
 | Delegate mode | None |
 | Team size | 8x1 |
 | Communication | None |
 | Specialization | specialized |
 
-**Agent Teams:** OFF
+---
 
-## Pre-session Setup
+## 1. Pre-Session Setup
+
+Run these commands from the ate-features repo root.
+
+### 1.1 Run preflight checks
 
 ```bash
-# 1. Run preflight (records CC version)
 ate-features exec preflight
-
-# 2. Scaffold session directories
-ate-features exec scaffold 6
-
-# 3. Create patches directory
-mkdir -p data/patches/treatment-6
-
-# 4. Record start time
-echo "Started: $(date -Iseconds)" >> data/transcripts/treatment-6/notes.md
 ```
+
+- [ ] Preflight passed (LangGraph at correct pin, clean working tree)
+- [ ] CC version recorded: `___________`
+
+### 1.2 Scaffold session directories
+
+```bash
+ate-features exec scaffold 6
+```
+
+- [ ] `data/transcripts/treatment-6/` created
+- [ ] `session_guide.md`, `metadata.json`, `notes.md` present
+
+### 1.3 Create patches directory
+
+```bash
+mkdir -p data/patches/treatment-6
+```
+
+- [ ] `data/patches/treatment-6/` exists
+
+### 1.4 Verify LangGraph is clean
+
+```bash
+git -C data/langgraph status
+git -C data/langgraph diff --stat
+```
+
+- [ ] Working tree clean (no modifications, no untracked files)
+
+### 1.5 Record session start
+
+```bash
+date -u +"%Y-%m-%dT%H:%M:%SZ"
+```
+
+- [ ] Start time: `___________`
 
 ---
 
-## Feature: F1 — Pandas DataFrame/Series msgpack serialization
+## 2. Opening Prompt
 
-### Start Session
+This is a per-feature treatment — run 8 separate sessions, one per feature. See the sub-sections below.
+
+---
+
+### 2.F1 — Pandas DataFrame/Series msgpack serialization
+
+Launch Claude Code:
 
 ```bash
 cd data/langgraph
 claude
 ```
 
-### Opening Prompt
+- [ ] Confirmed: launched with plain `claude` (no Agent Teams env var)
 
-```
+Paste the following prompt:
+
+````
 # Feature Implementation Task
 
 Implement the following features in the pinned LangGraph repository. For each feature: explore the codebase, implement the fix, run the acceptance tests, and create a patch file.
@@ -59,43 +103,31 @@ multi-index structures.
 
 ## Patch Instructions
 
-After implementing this feature, save the patch and reset:
-```
-git diff > data/patches/treatment-6/F1.patch
-git checkout . && git clean -fd
-```
+**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-6/F1.patch`, then reset with `git checkout . && git clean -fd`.
 
-```
 
-## Monitoring
+Remember: save your patch with `git diff > data/patches/treatment-6/F1.patch` and reset with `git checkout . && git clean -fd` when done.
+````
 
-**Escape threshold:** ~45 min per feature. If the agent is stuck for >10 min on a single approach, consider nudging.
-
-**Nudge templates:**
-- **Stuck:** "Have you considered looking at the test file for hints about the expected behavior?"
-- **Forgot patch:** "Please save a patch before moving on: `git diff > data/patches/treatment-{tid}/{FN}.patch`"
-- **Forgot reset:** "Please reset before the next feature: `git checkout . && git clean -fd`"
-
-### Post-feature
-
-```bash
-ate-features exec verify-patches 6
-```
+- [ ] Pasted opening prompt
+- [ ] Agent began working on F1
 
 ---
 
-## Feature: F2 — Generic Pydantic v2 type round-trip in checkpoint serde
+### 2.F2 — Generic Pydantic v2 type round-trip in checkpoint serde
 
-### Start Session
+Launch Claude Code:
 
 ```bash
 cd data/langgraph
 claude
 ```
 
-### Opening Prompt
+- [ ] Confirmed: launched with plain `claude` (no Agent Teams env var)
 
-```
+Paste the following prompt:
+
+````
 # Feature Implementation Task
 
 Implement the following features in the pinned LangGraph repository. For each feature: explore the codebase, implement the fix, run the acceptance tests, and create a patch file.
@@ -114,43 +146,31 @@ preserving the original type information.
 
 ## Patch Instructions
 
-After implementing this feature, save the patch and reset:
-```
-git diff > data/patches/treatment-6/F2.patch
-git checkout . && git clean -fd
-```
+**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-6/F2.patch`, then reset with `git checkout . && git clean -fd`.
 
-```
 
-## Monitoring
+Remember: save your patch with `git diff > data/patches/treatment-6/F2.patch` and reset with `git checkout . && git clean -fd` when done.
+````
 
-**Escape threshold:** ~45 min per feature. If the agent is stuck for >10 min on a single approach, consider nudging.
-
-**Nudge templates:**
-- **Stuck:** "Have you considered looking at the test file for hints about the expected behavior?"
-- **Forgot patch:** "Please save a patch before moving on: `git diff > data/patches/treatment-{tid}/{FN}.patch`"
-- **Forgot reset:** "Please reset before the next feature: `git checkout . && git clean -fd`"
-
-### Post-feature
-
-```bash
-ate-features exec verify-patches 6
-```
+- [ ] Pasted opening prompt
+- [ ] Agent began working on F2
 
 ---
 
-## Feature: F3 — StrEnum preservation in checkpoint serde
+### 2.F3 — StrEnum preservation in checkpoint serde
 
-### Start Session
+Launch Claude Code:
 
 ```bash
 cd data/langgraph
 claude
 ```
 
-### Opening Prompt
+- [ ] Confirmed: launched with plain `claude` (no Agent Teams env var)
 
-```
+Paste the following prompt:
+
+````
 # Feature Implementation Task
 
 Implement the following features in the pinned LangGraph repository. For each feature: explore the codebase, implement the fix, run the acceptance tests, and create a patch file.
@@ -168,43 +188,31 @@ attributes work correctly after deserialization.
 
 ## Patch Instructions
 
-After implementing this feature, save the patch and reset:
-```
-git diff > data/patches/treatment-6/F3.patch
-git checkout . && git clean -fd
-```
+**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-6/F3.patch`, then reset with `git checkout . && git clean -fd`.
 
-```
 
-## Monitoring
+Remember: save your patch with `git diff > data/patches/treatment-6/F3.patch` and reset with `git checkout . && git clean -fd` when done.
+````
 
-**Escape threshold:** ~45 min per feature. If the agent is stuck for >10 min on a single approach, consider nudging.
-
-**Nudge templates:**
-- **Stuck:** "Have you considered looking at the test file for hints about the expected behavior?"
-- **Forgot patch:** "Please save a patch before moving on: `git diff > data/patches/treatment-{tid}/{FN}.patch`"
-- **Forgot reset:** "Please reset before the next feature: `git checkout . && git clean -fd`"
-
-### Post-feature
-
-```bash
-ate-features exec verify-patches 6
-```
+- [ ] Pasted opening prompt
+- [ ] Agent began working on F3
 
 ---
 
-## Feature: F4 — Nested Enum deserialization fix
+### 2.F4 — Nested Enum deserialization fix
 
-### Start Session
+Launch Claude Code:
 
 ```bash
 cd data/langgraph
 claude
 ```
 
-### Opening Prompt
+- [ ] Confirmed: launched with plain `claude` (no Agent Teams env var)
 
-```
+Paste the following prompt:
+
+````
 # Feature Implementation Task
 
 Implement the following features in the pinned LangGraph repository. For each feature: explore the codebase, implement the fix, run the acceptance tests, and create a patch file.
@@ -223,43 +231,31 @@ the EXT_CONSTRUCTOR mechanism.
 
 ## Patch Instructions
 
-After implementing this feature, save the patch and reset:
-```
-git diff > data/patches/treatment-6/F4.patch
-git checkout . && git clean -fd
-```
+**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-6/F4.patch`, then reset with `git checkout . && git clean -fd`.
 
-```
 
-## Monitoring
+Remember: save your patch with `git diff > data/patches/treatment-6/F4.patch` and reset with `git checkout . && git clean -fd` when done.
+````
 
-**Escape threshold:** ~45 min per feature. If the agent is stuck for >10 min on a single approach, consider nudging.
-
-**Nudge templates:**
-- **Stuck:** "Have you considered looking at the test file for hints about the expected behavior?"
-- **Forgot patch:** "Please save a patch before moving on: `git diff > data/patches/treatment-{tid}/{FN}.patch`"
-- **Forgot reset:** "Please reset before the next feature: `git checkout . && git clean -fd`"
-
-### Post-feature
-
-```bash
-ate-features exec verify-patches 6
-```
+- [ ] Pasted opening prompt
+- [ ] Agent began working on F4
 
 ---
 
-## Feature: F5 — Reducer metadata ordering dependency
+### 2.F5 — Reducer metadata ordering dependency
 
-### Start Session
+Launch Claude Code:
 
 ```bash
 cd data/langgraph
 claude
 ```
 
-### Opening Prompt
+- [ ] Confirmed: launched with plain `claude` (no Agent Teams env var)
 
-```
+Paste the following prompt:
+
+````
 # Feature Implementation Task
 
 Implement the following features in the pinned LangGraph repository. For each feature: explore the codebase, implement the fix, run the acceptance tests, and create a patch file.
@@ -279,43 +275,31 @@ for a callable with a 2-parameter signature.
 
 ## Patch Instructions
 
-After implementing this feature, save the patch and reset:
-```
-git diff > data/patches/treatment-6/F5.patch
-git checkout . && git clean -fd
-```
+**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-6/F5.patch`, then reset with `git checkout . && git clean -fd`.
 
-```
 
-## Monitoring
+Remember: save your patch with `git diff > data/patches/treatment-6/F5.patch` and reset with `git checkout . && git clean -fd` when done.
+````
 
-**Escape threshold:** ~45 min per feature. If the agent is stuck for >10 min on a single approach, consider nudging.
-
-**Nudge templates:**
-- **Stuck:** "Have you considered looking at the test file for hints about the expected behavior?"
-- **Forgot patch:** "Please save a patch before moving on: `git diff > data/patches/treatment-{tid}/{FN}.patch`"
-- **Forgot reset:** "Please reset before the next feature: `git checkout . && git clean -fd`"
-
-### Post-feature
-
-```bash
-ate-features exec verify-patches 6
-```
+- [ ] Pasted opening prompt
+- [ ] Agent began working on F5
 
 ---
 
-## Feature: F6 — BinaryOperatorAggregate ignores default_factory
+### 2.F6 — BinaryOperatorAggregate ignores default_factory
 
-### Start Session
+Launch Claude Code:
 
 ```bash
 cd data/langgraph
 claude
 ```
 
-### Opening Prompt
+- [ ] Confirmed: launched with plain `claude` (no Agent Teams env var)
 
-```
+Paste the following prompt:
+
+````
 # Feature Implementation Task
 
 Implement the following features in the pinned LangGraph repository. For each feature: explore the codebase, implement the fix, run the acceptance tests, and create a patch file.
@@ -334,43 +318,31 @@ so that initial state matches the dataclass definition.
 
 ## Patch Instructions
 
-After implementing this feature, save the patch and reset:
-```
-git diff > data/patches/treatment-6/F6.patch
-git checkout . && git clean -fd
-```
+**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-6/F6.patch`, then reset with `git checkout . && git clean -fd`.
 
-```
 
-## Monitoring
+Remember: save your patch with `git diff > data/patches/treatment-6/F6.patch` and reset with `git checkout . && git clean -fd` when done.
+````
 
-**Escape threshold:** ~45 min per feature. If the agent is stuck for >10 min on a single approach, consider nudging.
-
-**Nudge templates:**
-- **Stuck:** "Have you considered looking at the test file for hints about the expected behavior?"
-- **Forgot patch:** "Please save a patch before moving on: `git diff > data/patches/treatment-{tid}/{FN}.patch`"
-- **Forgot reset:** "Please reset before the next feature: `git checkout . && git clean -fd`"
-
-### Post-feature
-
-```bash
-ate-features exec verify-patches 6
-```
+- [ ] Pasted opening prompt
+- [ ] Agent began working on F6
 
 ---
 
-## Feature: F7 — Nested message detection in stream_mode=messages
+### 2.F7 — Nested message detection in stream_mode=messages
 
-### Start Session
+Launch Claude Code:
 
 ```bash
 cd data/langgraph
 claude
 ```
 
-### Opening Prompt
+- [ ] Confirmed: launched with plain `claude` (no Agent Teams env var)
 
-```
+Paste the following prompt:
+
+````
 # Feature Implementation Task
 
 Implement the following features in the pinned LangGraph repository. For each feature: explore the codebase, implement the fix, run the acceptance tests, and create a patch file.
@@ -389,43 +361,31 @@ The fix should recursively traverse nested structures.
 
 ## Patch Instructions
 
-After implementing this feature, save the patch and reset:
-```
-git diff > data/patches/treatment-6/F7.patch
-git checkout . && git clean -fd
-```
+**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-6/F7.patch`, then reset with `git checkout . && git clean -fd`.
 
-```
 
-## Monitoring
+Remember: save your patch with `git diff > data/patches/treatment-6/F7.patch` and reset with `git checkout . && git clean -fd` when done.
+````
 
-**Escape threshold:** ~45 min per feature. If the agent is stuck for >10 min on a single approach, consider nudging.
-
-**Nudge templates:**
-- **Stuck:** "Have you considered looking at the test file for hints about the expected behavior?"
-- **Forgot patch:** "Please save a patch before moving on: `git diff > data/patches/treatment-{tid}/{FN}.patch`"
-- **Forgot reset:** "Please reset before the next feature: `git checkout . && git clean -fd`"
-
-### Post-feature
-
-```bash
-ate-features exec verify-patches 6
-```
+- [ ] Pasted opening prompt
+- [ ] Agent began working on F7
 
 ---
 
-## Feature: F8 — Input message dedup for nested structures
+### 2.F8 — Input message dedup for nested structures
 
-### Start Session
+Launch Claude Code:
 
 ```bash
 cd data/langgraph
 claude
 ```
 
-### Opening Prompt
+- [ ] Confirmed: launched with plain `claude` (no Agent Teams env var)
 
-```
+Paste the following prompt:
+
+````
 # Feature Implementation Task
 
 Implement the following features in the pinned LangGraph repository. For each feature: explore the codebase, implement the fix, run the acceptance tests, and create a patch file.
@@ -445,60 +405,202 @@ structures for message IDs.
 
 ## Patch Instructions
 
-After implementing this feature, save the patch and reset:
-```
-git diff > data/patches/treatment-6/F8.patch
-git checkout . && git clean -fd
-```
+**CRITICAL:** After implementing this feature, save your patch by running `git diff > data/patches/treatment-6/F8.patch`, then reset with `git checkout . && git clean -fd`.
 
-```
 
-## Monitoring
+Remember: save your patch with `git diff > data/patches/treatment-6/F8.patch` and reset with `git checkout . && git clean -fd` when done.
+````
 
-**Escape threshold:** ~45 min per feature. If the agent is stuck for >10 min on a single approach, consider nudging.
-
-**Nudge templates:**
-- **Stuck:** "Have you considered looking at the test file for hints about the expected behavior?"
-- **Forgot patch:** "Please save a patch before moving on: `git diff > data/patches/treatment-{tid}/{FN}.patch`"
-- **Forgot reset:** "Please reset before the next feature: `git checkout . && git clean -fd`"
-
-### Post-feature
-
-```bash
-ate-features exec verify-patches 6
-```
+- [ ] Pasted opening prompt
+- [ ] Agent began working on F8
 
 ---
 
-## Post-session
+---
 
-```bash
-# 1. Check for unsaved work
-cd data/langgraph && git diff --stat
+## 3. Monitoring Guidelines
 
-# 2. Verify patches
-ate-features exec verify-patches 6
+### 3.1 Cadence
 
-# 3. Record end time
-echo "Ended: $(date -Iseconds)" >> data/transcripts/treatment-6/notes.md
+Glance at the session every **2-3 minutes**. You do not need to watch continuously, but check progress regularly to catch stalls early.
 
-# 4. Revert LangGraph to clean state
-cd data/langgraph && git checkout . && git clean -fd
+### 3.2 What to watch for
+
+| Signal | Action |
+|--------|--------|
+| Agent making steady progress (reading, coding, testing) | No action needed |
+| Agent going in circles (re-reading same files, same approach) | Note time; prepare to nudge at threshold |
+| Agent asks a clarifying question | Answer promptly |
+| Agent forgot to save patch before next feature | Intervene immediately (see nudge examples) |
+| Agent forgot to reset (`git checkout . && git clean -fd`) | Intervene immediately |
+| Agent stuck on unrelated build/test errors | Nudge toward a different approach |
+| No output for >2 minutes | Check if waiting for input |
+
+### 3.3 Escape time thresholds
+
+Wall-clock time limit per feature: **~45 minutes**. If the agent has not produced a patch (or acknowledged it cannot) within the threshold, intervene.
+
+### 3.4 Nudge examples
+
+Use these as templates. Adapt to the situation.
+
+**If stuck on a feature past the threshold:**
+```
+Let's move on. Save whatever patch you have (even if incomplete) with:
+git diff > data/patches/treatment-6/<feature-id>.patch
+Then reset with: git checkout . && git clean -fd
+And proceed to the next feature.
 ```
 
-**Transcript location:** `~/.claude/projects/-Users-kartikganapathi-Documents-Personal-random_projects-others-projects-checkout-ate-features/`
+**If agent forgot to save a patch:**
+```
+Before moving on, please save the patch for the feature you just finished:
+git diff > data/patches/treatment-6/<feature-id>.patch
+Then reset: git checkout . && git clean -fd
+```
+
+**If agent forgot to reset LangGraph:**
+```
+Please reset the LangGraph source before starting the next feature:
+git checkout . && git clean -fd
+Verify with: git diff --stat
+```
+
+**If agent is going in circles:**
+```
+You seem to be revisiting the same approach. Can you try a different angle?
+If you're stuck, it's OK to save what you have and move on to the next feature.
+```
+
+
+---
+
+## 4. After-Session Steps
+
+### 4.1 Record end timestamp
+
+```bash
+date -u +"%Y-%m-%dT%H:%M:%SZ"
+```
+
+- [ ] End time: `___________`
+
+### 4.2 Check for unsaved work
+
+```bash
+git -C data/langgraph diff --stat
+```
+
+If there are uncommitted changes, save them as a remaining patch:
+
+```bash
+git -C data/langgraph diff > data/patches/treatment-6/remaining.patch
+git -C data/langgraph checkout . && git -C data/langgraph clean -fd
+```
+
+### 4.3 Verify patches
+
+```bash
+ate-features exec verify-patches 6
+ls -la data/patches/treatment-6/
+```
+
+Expected: up to 8 files (`F1.patch` through `F8.patch`). Some may be empty (0 bytes) if the agent could not implement that feature.
+
+- [ ] Verified patch files present
+- [ ] Non-empty patches: `___________`
+
+### 4.4 Verify LangGraph is clean
+
+```bash
+git -C data/langgraph status
+```
+
+- [ ] Working tree clean
+
+### 4.5 Update metadata.json
+
+Update `data/transcripts/treatment-6/metadata.json` with actual timing and outcome data:
+
+```json
+{
+  "started_at": "2026-XX-XXTXX:XX:XXZ",
+  "completed_at": "2026-XX-XXTXX:XX:XXZ",
+  "wall_clock_seconds": null,
+  "session_id": null,
+  "model": "claude-opus-4-6",
+  "notes": null
+}
+```
+
+- [ ] metadata.json updated
+
+### 4.6 Write session notes
+
+Record observations in `data/transcripts/treatment-6/notes.md`. Use this format:
+
+```markdown
+# Notes: Treatment 6 — Specialized Swim Lanes
+
+## Timeline
+- HH:MM Session started
+- HH:MM Agent began Feature F1
+- ...
+
+## Per-Feature Outcomes
+| Feature | Outcome | Time |
+|---------|---------|------|
+| F1 | fix/partial/stuck | ~X min |
+| ... | ... | ... |
+
+## Interventions
+- (timestamp): (what you said)
+
+## Observations
+- Notable behavior: (anything interesting)
+- Approximate tool calls: ~N
+```
+
+- [ ] Notes written
+
+### 4.7 Save session transcript
+
+Claude Code stores session transcripts as JSONL files at:
+
+```
+~/.claude/projects/-Users-kartikganapathi-Documents-Personal-random_projects-others-projects-checkout-ate-features/
+```
+
 Look for the most recent `.jsonl` file matching the session time.
 
-## Final Checklist
+- [ ] Session transcript located or session ID noted: `___________`
 
-- [ ] Preflight passed
-- [ ] Session scaffolded
-- [ ] Start time recorded
-- [ ] Opening prompt pasted
-- [ ] All features implemented
-- [ ] Patches saved (one per feature)
-- [ ] Patches verified
-- [ ] End time recorded
-- [ ] Transcript located
-- [ ] LangGraph reverted to clean state
-- [ ] Notes finalized
+---
+
+## 5. Final Checklist
+
+- [ ] No Agent Teams env var was set (plain `claude`)
+- [ ] All 8 features were attempted
+- [ ] Patches saved for each feature (even if empty)
+- [ ] LangGraph was reset between features
+- [ ] LangGraph is clean after final feature
+- [ ] Per-feature timing recorded in monitoring table
+- [ ] metadata.json updated with actual data
+- [ ] Notes written with observations
+- [ ] Session transcript saved
+- [ ] Total wall-clock time: `___________`
+
+---
+
+## Appendix: Feature Quick Reference
+
+| # | ID | Title | Subsystem |
+|---|----|-------|-----------|
+| 1 | F1 | Pandas DataFrame/Series msgpack serialization | serializer |
+| 2 | F2 | Generic Pydantic v2 type round-trip in checkpoint serde | serializer |
+| 3 | F3 | StrEnum preservation in checkpoint serde | serializer |
+| 4 | F4 | Nested Enum deserialization fix | serializer |
+| 5 | F5 | Reducer metadata ordering dependency | state |
+| 6 | F6 | BinaryOperatorAggregate ignores default_factory | state |
+| 7 | F7 | Nested message detection in stream_mode=messages | streaming |
+| 8 | F8 | Input message dedup for nested structures | streaming |
