@@ -61,15 +61,30 @@ class CommunicationSummary(BaseModel):
 # --- Transcript path ---
 
 TRANSCRIPT_BASE = Path.home() / ".claude" / "projects"
-PROJECT_PATH_COMPONENT = (
+# Sessions launched from ate-features root
+_ATE_FEATURES_COMPONENT = (
     "-Users-kartikganapathi-Documents-Personal-random_projects"
     "-others-projects-checkout-ate-features"
 )
+# Sessions launched from data/langgraph (the experiment working dir)
+_LANGGRAPH_COMPONENT = (
+    "-Users-kartikganapathi-Documents-Personal-random-projects"
+    "-others-projects-checkout-ate-features-data-langgraph"
+)
 
 
-def get_transcript_dir() -> Path:
-    """Return the Claude Code transcript directory for this project."""
-    return TRANSCRIPT_BASE / PROJECT_PATH_COMPONENT
+def get_transcript_dir(session_id: str | None = None) -> Path:
+    """Return the Claude Code transcript directory for a session.
+
+    Checks both the ate-features and data/langgraph project dirs,
+    since sessions are launched from data/langgraph.
+    """
+    if session_id:
+        for component in [_LANGGRAPH_COMPONENT, _ATE_FEATURES_COMPONENT]:
+            candidate = TRANSCRIPT_BASE / component / f"{session_id}.jsonl"
+            if candidate.exists():
+                return TRANSCRIPT_BASE / component
+    return TRANSCRIPT_BASE / _ATE_FEATURES_COMPONENT
 
 
 # --- Parser ---

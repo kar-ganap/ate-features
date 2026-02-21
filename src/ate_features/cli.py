@@ -32,7 +32,7 @@ def comms_parse(session_id: str) -> None:
     """Parse a transcript and show communication events."""
     from ate_features.communication import get_transcript_dir, parse_transcript
 
-    transcript_dir = get_transcript_dir()
+    transcript_dir = get_transcript_dir(session_id)
     transcript_path = transcript_dir / f"{session_id}.jsonl"
 
     if not transcript_path.exists():
@@ -57,7 +57,7 @@ def comms_summary(session_id: str, treatment_id: str) -> None:
         summarize_communication,
     )
 
-    transcript_dir = get_transcript_dir()
+    transcript_dir = get_transcript_dir(session_id)
     transcript_path = transcript_dir / f"{session_id}.jsonl"
 
     if not transcript_path.exists():

@@ -211,15 +211,21 @@ def _detailed_prompt(
         test_dir = f"tests/acceptance/test_{feat.id.lower()}_*.py"
         lines.append(f"**Tests:** `{test_dir}`\n")
 
-    if assignments and uses_agent_teams(treatment):
+    if uses_agent_teams(treatment):
         lines.append("## Feature Assignments\n")
-        for agent_num, feats in [
-            (1, assignments.agent_1),
-            (2, assignments.agent_2),
-            (3, assignments.agent_3),
-            (4, assignments.agent_4),
-        ]:
-            lines.append(f"- **Agent {agent_num}:** {', '.join(feats)}")
+        if treatment.dimensions.team_size == TeamSize.EIGHT_BY_ONE:
+            for i, feat in enumerate(features, 1):
+                lines.append(f"- **Agent {i}:** {feat.id}")
+        elif assignments:
+            for agent_num, feats in [
+                (1, assignments.agent_1),
+                (2, assignments.agent_2),
+                (3, assignments.agent_3),
+                (4, assignments.agent_4),
+            ]:
+                lines.append(
+                    f"- **Agent {agent_num}:** {', '.join(feats)}"
+                )
         lines.append("")
 
     return "\n".join(lines)

@@ -186,10 +186,14 @@ structures for message IDs.
 
 ## Feature Assignments
 
-- **Agent 1:** F1, F5
-- **Agent 2:** F2, F6
-- **Agent 3:** F3, F7
-- **Agent 4:** F4, F8
+- **Agent 1:** F1
+- **Agent 2:** F2
+- **Agent 3:** F3
+- **Agent 4:** F4
+- **Agent 5:** F5
+- **Agent 6:** F6
+- **Agent 7:** F7
+- **Agent 8:** F8
 
 ## Team Setup
 
