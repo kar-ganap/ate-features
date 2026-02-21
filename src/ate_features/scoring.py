@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 import subprocess
 import xml.etree.ElementTree as ET
@@ -204,3 +205,98 @@ def collect_scores(
         save_scores(scores, treatment_id, data_dir=data_dir)
 
     return scores
+
+
+# --- Aggregation ---
+
+
+def summarize_treatment(
+    scores: list[TieredScore],
+    weights: dict[str, float],
+) -> dict[str, object]:
+    """Compute per-treatment summary statistics.
+
+    Returns dict with treatment_id, n_features, mean/min/max composite,
+    and per_feature composite dict.
+    """
+    if not scores:
+        return {
+            "treatment_id": None,
+            "n_features": 0,
+            "mean_composite": 0.0,
+            "min_composite": 0.0,
+            "max_composite": 0.0,
+            "per_feature": {},
+        }
+
+    per_feature: dict[str, float] = {}
+    for s in scores:
+        per_feature[s.feature_id] = s.composite(weights)
+
+    composites = list(per_feature.values())
+    return {
+        "treatment_id": str(scores[0].treatment_id),
+        "n_features": len(scores),
+        "mean_composite": sum(composites) / len(composites),
+        "min_composite": min(composites),
+        "max_composite": max(composites),
+        "per_feature": per_feature,
+    }
+
+
+def summarize_all(
+    all_scores: dict[str, list[TieredScore]],
+    weights: dict[str, float],
+) -> dict[str, dict[str, object]]:
+    """Compute summaries for all treatments."""
+    return {
+        tid: summarize_treatment(scores, weights)
+        for tid, scores in all_scores.items()
+    }
+
+
+# --- Wave 2 Decision Gate ---
+
+
+def evaluate_wave2(
+    all_scores: dict[str, list[TieredScore]],
+    weights: dict[str, float],
+    cv_threshold: float,
+) -> tuple[bool, str]:
+    """Evaluate whether Wave 2 is recommended based on treatment variance.
+
+    Computes coefficient of variation (CV) of mean composite scores
+    across treatments. If CV > threshold, recommends Wave 2.
+
+    Returns (recommend, reasoning).
+    """
+    if not all_scores:
+        return False, "No scores available — insufficient data for decision."
+
+    summaries = summarize_all(all_scores, weights)
+    means: list[float] = [
+        float(s["mean_composite"]) for s in summaries.values()  # type: ignore[arg-type]
+    ]
+
+    grand_mean = sum(means) / len(means)
+    if grand_mean == 0.0:
+        return False, (
+            f"All treatments scored 0.0 — no variance to analyze. "
+            f"CV threshold: {cv_threshold:.2f}."
+        )
+
+    variance = sum((m - grand_mean) ** 2 for m in means) / len(means)
+    std = math.sqrt(variance)
+    cv = std / grand_mean
+
+    recommend = cv > cv_threshold
+    action = "RECOMMEND Wave 2" if recommend else "DO NOT recommend Wave 2"
+
+    reasoning = (
+        f"{action}. "
+        f"CV = {cv:.4f} ({'>' if recommend else '<='} threshold {cv_threshold:.2f}). "
+        f"Mean composite across {len(means)} treatments: {grand_mean:.4f} "
+        f"(min={min(means):.4f}, max={max(means):.4f}, SD={std:.4f})."
+    )
+
+    return recommend, reasoning
