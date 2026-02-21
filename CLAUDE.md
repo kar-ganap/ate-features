@@ -41,6 +41,7 @@ ate-features/
 ├── config/
 │   ├── features.yaml          # 8 LangGraph features with specs
 │   ├── treatments.yaml        # 11 treatments (8 core + 3 specialized)
+│   ├── scoring.yaml           # Composite weights + Wave 2 threshold
 │   ├── specializations/        # 4 agent domain context files
 │   └── prompts/
 │       └── communication_nudges.yaml  # Pattern-quality nudges
@@ -56,14 +57,15 @@ ate-features/
 │   ├── scores/                # Tiered scores
 │   └── acceptance-tests/      # T1/T2/T3 test suites per feature
 ├── src/ate_features/
-│   ├── models.py              # Pydantic models (incl. RunMetadata)
-│   ├── config.py              # YAML loading + specialization loader
+│   ├── models.py              # Pydantic models (incl. RunMetadata, TieredScore)
+│   ├── config.py              # YAML loading + specialization + scoring config
 │   ├── harness.py             # Execution harness (scaffold, prompts, patches)
+│   ├── scoring.py             # Scoring: XML parsing, collection, aggregation, Wave 2
 │   ├── communication.py       # Transcript parsing + communication models
-│   └── cli.py                 # CLI with comms + exec subcommands
+│   └── cli.py                 # CLI with comms + exec + score subcommands
 ├── tests/
-│   ├── unit/                  # Unit tests (117 tests)
-│   └── acceptance/            # LangGraph acceptance tests (96 tests)
+│   ├── unit/                  # Unit tests (163 tests)
+│   └── acceptance/            # LangGraph acceptance tests (104 tests)
 ├── scripts/
 │   ├── pin_langgraph.sh       # Clone pinned LangGraph
 │   └── setup_langgraph.sh     # Editable install of LangGraph libs
@@ -79,11 +81,12 @@ ate-features/
 
 ## Current State
 
-**Phase 2 complete.** Execution harness: scaffolding, prompt generation
-(detailed/vague × specialization × communication nudge), session guides,
-patch management (apply/revert), CLI exec commands.
+**Phase 3 complete.** Scoring framework: T4 backfill for F1-F4 (104
+acceptance tests), composite weights (`config/scoring.yaml`), JUnit XML
+parsing, score collection/persistence, aggregation, Wave 2 decision gate,
+CLI score commands.
 
-117 unit tests + 96 acceptance tests = 213 total.
+163 unit tests + 104 acceptance tests = 267 total.
 
 ## Phases
 
@@ -92,21 +95,23 @@ patch management (apply/revert), CLI exec commands.
 | 0 | `phase-0-scaffold` | Complete |
 | 1 | `phase-1-langgraph-tests` | Complete |
 | 2 | `phase-2-execution-harness` | Complete |
+| 3 | `phase-3-scoring-framework` | Complete |
 
 ## Acceptance Test Results (against pinned LangGraph)
 
 | Feature | T1 | T2 | T3 | T4 | Fails | Notes |
 |---------|----|----|-----|-----|-------|-------|
-| F1 Pandas serde | 3F | 5F | 3F | — | 11/11 | No pandas handler |
-| F2 Pydantic round-trip | 3F | 5F | 3F | — | 11/11 | No `.dumps` method |
-| F3 StrEnum preservation | 3F | 5F | 3F | — | 11/11 | StrEnum not preserved |
-| F4 Nested Enum | 3F | 5F | 3F | — | 11/11 | Enums in containers lost |
+| F1 Pandas serde | 3F | 5F | 3F | 2F | 13/13 | No pandas handler |
+| F2 Pydantic round-trip | 3F | 5F | 3F | 2F | 13/13 | No `.dumps` method |
+| F3 StrEnum preservation | 3F | 5F | 3F | 2F | 13/13 | StrEnum not preserved |
+| F4 Nested Enum | 3F | 5F | 3F | 2F | 13/13 | Enums in containers lost |
 | F5 Reducer metadata | 3F | 5F | 3F | 2F | 13/13 | `meta[-1]` only checks last |
 | F6 Default factory | 3F | 5F | 3F | 2F | 13/13 | `typ()` ignores factory |
 | F7 Nested emission | 3F | 5F | 3F | 2F | 13/13 | 2-level scan only |
 | F8 Nested dedup | 3F | 5F | 3F | 2F | 13/13 | Input msgs not tracked |
 
-All 96 tests fail against pinned commit. 0 passing.
+All 104 tests fail against pinned commit. 0 passing. Uniform structure:
+3 T1 + 5 T2 + 3 T3 + 2 T4 = 13 per feature.
 
 ## Communication Infrastructure
 
@@ -123,6 +128,15 @@ All 96 tests fail against pinned commit. 0 passing.
 - Specialization files mapped by agent number: `load_specialization(1-4)`
 - Per-feature treatments (0b, 6): 8×1 without Agent Teams → 8 sub-directories
 - `apply_patch()` does `--check` before `apply`; `revert_langgraph()` does `checkout . && clean -fd`
+
+## Scoring Infrastructure
+
+- `src/ate_features/scoring.py` — JUnit XML parsing, score collection/persistence, aggregation, Wave 2 decision
+- `config/scoring.yaml` — composite weights (T1=0.15, T2=0.35, T3=0.30, T4=0.20) + CV threshold (0.10)
+- `TieredScore.composite(weights)` — weighted combination on the model
+- Collection pipeline: apply patch → pytest --junitxml → parse XML → revert → persist to `data/scores/`
+- Wave 2 decision: CV of mean composites across treatments; CV > threshold → recommend Wave 2
+- CLI: `ate-features score collect <tid>`, `ate-features score show [tid]`, `ate-features score decide-wave2`
 
 ## Known Gotchas
 
