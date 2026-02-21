@@ -9,6 +9,7 @@ from pathlib import Path
 from ate_features.models import (
     Feature,
     FeatureAssignment,
+    PatchStatus,
     PreflightResult,
     PromptSpecificity,
     RunMetadata,
@@ -426,6 +427,47 @@ def _scaffold_session(
 
 
 # --- Patch Management ---
+
+FEATURE_IDS = [f"F{i}" for i in range(1, 9)]
+
+
+def verify_patches(
+    treatment_id: int | str,
+    *,
+    langgraph_dir: Path | None = None,
+    data_dir: Path = DEFAULT_DATA_DIR,
+) -> dict[str, PatchStatus]:
+    """Verify patch files for a treatment.
+
+    Checks F1-F8: exist → non-empty → applies cleanly (if langgraph_dir given).
+    """
+    result: dict[str, PatchStatus] = {}
+    patch_dir = data_dir / "patches" / f"treatment-{treatment_id}"
+
+    for fid in FEATURE_IDS:
+        patch_path = patch_dir / f"{fid}.patch"
+
+        if not patch_path.exists():
+            result[fid] = PatchStatus.MISSING
+            continue
+
+        if patch_path.stat().st_size == 0:
+            result[fid] = PatchStatus.EMPTY
+            continue
+
+        if langgraph_dir is not None:
+            check = subprocess.run(
+                ["git", "apply", "--check", str(patch_path)],
+                cwd=langgraph_dir,
+                capture_output=True,
+            )
+            if check.returncode != 0:
+                result[fid] = PatchStatus.INVALID
+                continue
+
+        result[fid] = PatchStatus.VALID
+
+    return result
 
 
 def apply_patch(patch_path: Path, langgraph_dir: Path) -> bool:

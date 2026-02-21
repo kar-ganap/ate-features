@@ -191,6 +191,13 @@ class TieredScore(BaseModel):
 # --- Run Tracking ---
 
 
+class PatchStatus(StrEnum):
+    MISSING = "missing"
+    EMPTY = "empty"
+    VALID = "valid"
+    INVALID = "invalid"
+
+
 class PreflightResult(BaseModel):
     """Result of preflight checks before a session."""
 

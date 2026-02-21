@@ -103,6 +103,29 @@ def exec_preflight(
     typer.echo(f"Claude Code version: {result.claude_code_version}")
 
 
+@exec_app.command("verify-patches")
+def exec_verify_patches(
+    treatment_id: str,
+    langgraph_dir: str | None = None,
+) -> None:
+    """Verify patch files for a treatment (F1-F8)."""
+    from pathlib import Path
+
+    from ate_features.harness import verify_patches
+
+    tid = _parse_tid(treatment_id)
+    lg_path = Path(langgraph_dir) if langgraph_dir else None
+
+    result = verify_patches(tid, langgraph_dir=lg_path)
+
+    for fid, status in sorted(result.items()):
+        typer.echo(f"  {fid}: {status.value}")
+
+    valid = sum(1 for s in result.values() if s.value == "valid")
+    total = len(result)
+    typer.echo(f"\n{valid}/{total} valid patches")
+
+
 @exec_app.command("scaffold")
 def exec_scaffold(
     treatment_id: str,
