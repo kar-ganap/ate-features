@@ -147,6 +147,7 @@ def get_opening_prompt(
     specialization_context: str | None = None,
     communication_nudge: str | None = None,
     include_patch_instructions: bool = True,
+    scoring_mode: str = "isolated",
 ) -> str:
     """Generate the opening prompt for a treatment session."""
     parts: list[str] = []
@@ -175,8 +176,12 @@ def get_opening_prompt(
 
     # Patch instructions
     if include_patch_instructions:
-        parts.append(_patch_instructions(treatment, features))
-        parts.append(_patch_reminder(treatment, features))
+        if scoring_mode == "cumulative":
+            parts.append(_patch_instructions_cumulative(treatment, features))
+            parts.append(_patch_reminder_cumulative(treatment, features))
+        else:
+            parts.append(_patch_instructions(treatment, features))
+            parts.append(_patch_reminder(treatment, features))
 
     return "\n".join(parts)
 
@@ -264,6 +269,46 @@ def _patch_reminder(treatment: Treatment, features: list[Feature]) -> str:
         f"`git diff > data/patches/treatment-{tid}/<FN>.patch` "
         f"and reset with `git checkout . && git clean -fd` "
         f"before starting the next feature. Start with {features[0].id}."
+    )
+
+
+def _patch_instructions_cumulative(
+    treatment: Treatment, features: list[Feature],
+) -> str:
+    """Generate cumulative patch instructions (no resets between features)."""
+    tid = treatment.id
+    lines: list[str] = []
+    lines.append("## Patch Instructions\n")
+    lines.append(
+        "**CRITICAL:** Implement all features on the **same working tree**. "
+        "Do NOT reset between features — each feature builds on the prior "
+        "changes.\n"
+    )
+    lines.append(
+        f"After implementing **each** feature, snapshot your work:\n"
+        f"1. `git diff > data/patches/treatment-{tid}/<FN>.patch`\n"
+        f"2. `git add -A`\n"
+    )
+    lines.append(
+        f"When **all** features are complete, save the combined patch:\n"
+        f"`git diff --staged > data/patches/treatment-{tid}/cumulative.patch`"
+    )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _patch_reminder_cumulative(
+    treatment: Treatment, features: list[Feature],
+) -> str:
+    """Closing reminder for cumulative patch protocol."""
+    tid = treatment.id
+    return (
+        f"\nRemember: after each feature, snapshot with "
+        f"`git diff > data/patches/treatment-{tid}/<FN>.patch` "
+        f"then `git add -A`. When all features are done, save the combined "
+        f"patch with "
+        f"`git diff --staged > data/patches/treatment-{tid}/cumulative.patch`. "
+        f"Start with {features[0].id}."
     )
 
 
