@@ -108,11 +108,14 @@ Wait for all teammates to complete their tasks before creating the final combine
 
 ## Patch Instructions
 
-**CRITICAL:** Implement all assigned features. When **all** features are complete, save the combined patch:
+**CRITICAL:** Implement all assigned features. After each agent completes its feature, have it save a snapshot:
+`git diff > data/patches/treatment-4/<FN>.patch`
+
+When **all** features are complete, save the combined patch:
 `git diff > data/patches/treatment-4/cumulative.patch`
 
 
-Remember: when all features are done, save the combined patch with `git diff > data/patches/treatment-4/cumulative.patch`. Start with F1.
+Remember: after each agent finishes, save its snapshot with `git diff > data/patches/treatment-4/<FN>.patch`. When all features are done, save the combined patch with `git diff > data/patches/treatment-4/cumulative.patch`. Start with F1.
 ````
 
 ---

@@ -347,6 +347,9 @@ def _patch_instructions_cumulative(
     elif at:
         lines.append(
             "**CRITICAL:** Implement all assigned features. "
+            "After each agent completes its feature, have it save a "
+            "snapshot:\n"
+            f"`git diff > data/patches/treatment-{tid}/<FN>.patch`\n\n"
             "When **all** features are complete, save the combined patch:\n"
             f"`git diff > data/patches/treatment-{tid}/cumulative.patch`"
         )
@@ -389,7 +392,9 @@ def _patch_reminder_cumulative(
 
     if at:
         return (
-            f"\nRemember: when all features are done, save the combined "
+            f"\nRemember: after each agent finishes, save its snapshot with "
+            f"`git diff > data/patches/treatment-{tid}/<FN>.patch`. "
+            f"When all features are done, save the combined "
             f"patch with "
             f"`git diff > data/patches/treatment-{tid}/cumulative.patch`. "
             f"Start with {features[0].id}."

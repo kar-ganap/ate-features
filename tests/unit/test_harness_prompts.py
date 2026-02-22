@@ -397,3 +397,25 @@ class TestCumulativePatchInstructions:
             treatment, features, scoring_mode="cumulative",
         )
         assert "do not implement" not in prompt.lower()
+
+    def test_cumulative_at_has_per_feature_snapshots(self) -> None:
+        """AT treatments should instruct per-feature snapshot saving."""
+        treatment = _get_treatment(1)
+        features = _get_features()
+        config = load_treatments()
+        prompt = get_opening_prompt(
+            treatment, features, scoring_mode="cumulative",
+            assignments=config.feature_assignments.explicit,
+        )
+        assert "<FN>.patch" in prompt or "FN.patch" in prompt
+
+    def test_cumulative_8x1_has_per_feature_snapshots(self) -> None:
+        """8x1 AT treatment should instruct per-feature snapshot saving."""
+        treatment = _get_treatment(5)
+        features = _get_features()
+        config = load_treatments()
+        prompt = get_opening_prompt(
+            treatment, features, scoring_mode="cumulative",
+            assignments=config.feature_assignments.explicit,
+        )
+        assert "<FN>.patch" in prompt or "FN.patch" in prompt
