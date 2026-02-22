@@ -161,6 +161,8 @@ class TieredScore(BaseModel):
     t3_total: int = Field(ge=0)
     t4_passed: int = Field(default=0, ge=0)
     t4_total: int = Field(default=0, ge=0)
+    t5_passed: int = Field(default=0, ge=0)
+    t5_total: int = Field(default=0, ge=0)
 
     @property
     def t1_score(self) -> float:
@@ -178,6 +180,10 @@ class TieredScore(BaseModel):
     def t4_score(self) -> float:
         return self.t4_passed / self.t4_total if self.t4_total > 0 else 0.0
 
+    @property
+    def t5_score(self) -> float:
+        return self.t5_passed / self.t5_total if self.t5_total > 0 else 0.0
+
     def composite(self, weights: dict[str, float]) -> float:
         """Compute weighted composite score."""
         return (
@@ -185,6 +191,7 @@ class TieredScore(BaseModel):
             + weights["t2"] * self.t2_score
             + weights["t3"] * self.t3_score
             + weights["t4"] * self.t4_score
+            + weights.get("t5", 0.0) * self.t5_score
         )
 
 

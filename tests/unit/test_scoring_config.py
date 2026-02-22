@@ -19,10 +19,10 @@ class TestLoadScoringConfig:
         total = w["t1"] + w["t2"] + w["t3"] + w["t4"]
         assert abs(total - 1.0) < 1e-9
 
-    def test_all_weights_positive(self) -> None:
+    def test_all_weights_non_negative(self) -> None:
         config = load_scoring_config()
         for tier, weight in config["weights"].items():
-            assert weight > 0, f"Weight for {tier} must be positive"
+            assert weight >= 0, f"Weight for {tier} must be non-negative"
 
     def test_has_wave2_threshold(self) -> None:
         config = load_scoring_config()

@@ -66,3 +66,51 @@ class TestComposite:
             t4_passed=0, t4_total=0,
         )
         assert score.composite(DEFAULT_WEIGHTS) == 0.0
+
+
+class TestT5Composite:
+    def test_t5_score_property(self) -> None:
+        score = TieredScore(
+            feature_id="F1", treatment_id="0a",
+            t1_passed=3, t1_total=3,
+            t2_passed=5, t2_total=5,
+            t3_passed=3, t3_total=3,
+            t4_passed=2, t4_total=2,
+            t5_passed=1, t5_total=2,
+        )
+        assert score.t5_score == 0.5
+
+    def test_t5_defaults_to_zero(self) -> None:
+        score = TieredScore(
+            feature_id="F1", treatment_id="0a",
+            t1_passed=3, t1_total=3,
+            t2_passed=5, t2_total=5,
+            t3_passed=3, t3_total=3,
+        )
+        assert score.t5_passed == 0
+        assert score.t5_total == 0
+        assert score.t5_score == 0.0
+
+    def test_composite_with_t5_weight(self) -> None:
+        score = TieredScore(
+            feature_id="F1", treatment_id="0a",
+            t1_passed=3, t1_total=3,
+            t2_passed=5, t2_total=5,
+            t3_passed=3, t3_total=3,
+            t4_passed=2, t4_total=2,
+            t5_passed=2, t5_total=2,
+        )
+        weights_with_t5 = {"t1": 0.10, "t2": 0.30, "t3": 0.25, "t4": 0.15, "t5": 0.20}
+        assert score.composite(weights_with_t5) == 1.0
+
+    def test_composite_without_t5_weight_backward_compatible(self) -> None:
+        score = TieredScore(
+            feature_id="F1", treatment_id="0a",
+            t1_passed=3, t1_total=3,
+            t2_passed=5, t2_total=5,
+            t3_passed=3, t3_total=3,
+            t4_passed=2, t4_total=2,
+            t5_passed=0, t5_total=2,
+        )
+        # Without t5 in weights, t5 failing should not affect composite
+        assert score.composite(DEFAULT_WEIGHTS) == 1.0

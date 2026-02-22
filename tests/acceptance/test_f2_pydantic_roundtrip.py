@@ -293,3 +293,48 @@ class TestT4Smoke:
         )
         assert isinstance(result["model"], GenericModel)
         assert result["model"].data == 99
+
+
+class TestT5Robustness:
+    """Robustness edge cases — spec-derived tests a QA engineer would flag."""
+
+    def test_multiple_model_types_coexist(self) -> None:
+        """Two different Pydantic model types in the same serialized data."""
+        from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+        serde = JsonPlusSerializer()
+        data = {
+            "simple": SimpleModel(name="hello", count=1),
+            "nested": NestedOuter(inner=SimpleModel(name="inner", count=2), label="outer"),
+            "frozen": FrozenModel(x=5, y="world"),
+        }
+
+        serialized = serde.dumps(data)
+        result = serde.loads(serialized)
+
+        assert type(result["simple"]) is SimpleModel
+        assert type(result["nested"]) is NestedOuter
+        assert type(result["frozen"]) is FrozenModel
+        assert result["simple"].name == "hello"
+        assert result["nested"].inner.count == 2
+
+    def test_model_with_aliased_field(self) -> None:
+        """Pydantic model with Field(alias=...) preserves data after round-trip."""
+
+        class AliasedModel(BaseModel):
+            user_name: str = Field(alias="userName")
+            age: int
+
+            model_config = {"populate_by_name": True}
+
+        from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+        serde = JsonPlusSerializer()
+        obj = AliasedModel(user_name="alice", age=30)
+
+        serialized = serde.dumps({"m": obj})
+        result = serde.loads(serialized)
+
+        assert isinstance(result["m"], AliasedModel)
+        assert result["m"].user_name == "alice"
+        assert result["m"].age == 30

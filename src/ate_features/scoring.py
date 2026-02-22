@@ -18,6 +18,7 @@ _TIER_PATTERNS: dict[str, str] = {
     "t2": "TestT2",
     "t3": "TestT3",
     "t4": "TestT4",
+    "t5": "TestT5",
 }
 
 
@@ -34,8 +35,8 @@ def parse_junit_xml(
     tree = ET.parse(xml_path)  # noqa: S314
     root = tree.getroot()
 
-    tier_totals: dict[str, int] = {"t1": 0, "t2": 0, "t3": 0, "t4": 0}
-    tier_passed: dict[str, int] = {"t1": 0, "t2": 0, "t3": 0, "t4": 0}
+    tier_totals: dict[str, int] = {k: 0 for k in _TIER_PATTERNS}
+    tier_passed: dict[str, int] = {k: 0 for k in _TIER_PATTERNS}
 
     for testcase in root.iter("testcase"):
         classname = testcase.get("classname", "")
@@ -60,6 +61,8 @@ def parse_junit_xml(
         t3_total=tier_totals["t3"],
         t4_passed=tier_passed["t4"],
         t4_total=tier_totals["t4"],
+        t5_passed=tier_passed["t5"],
+        t5_total=tier_totals["t5"],
     )
 
 
@@ -105,8 +108,8 @@ def parse_junit_xml_cumulative(
 
     scores: list[TieredScore] = []
     for fid in sorted(by_feature.keys()):
-        tier_totals: dict[str, int] = {"t1": 0, "t2": 0, "t3": 0, "t4": 0}
-        tier_passed: dict[str, int] = {"t1": 0, "t2": 0, "t3": 0, "t4": 0}
+        tier_totals: dict[str, int] = {k: 0 for k in _TIER_PATTERNS}
+        tier_passed: dict[str, int] = {k: 0 for k in _TIER_PATTERNS}
 
         for testcase in by_feature[fid]:
             classname = testcase.get("classname", "")
@@ -130,6 +133,8 @@ def parse_junit_xml_cumulative(
             t3_total=tier_totals["t3"],
             t4_passed=tier_passed["t4"],
             t4_total=tier_totals["t4"],
+            t5_passed=tier_passed["t5"],
+            t5_total=tier_totals["t5"],
         ))
 
     return scores

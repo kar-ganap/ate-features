@@ -267,3 +267,44 @@ class TestT4Smoke:
         assert isinstance(result["series"], pd.Series)
         assert result["series"].name == "values"
         assert list(result["series"]) == [10, 20, 30]
+
+
+class TestT5Robustness:
+    """Robustness edge cases — spec-derived tests a QA engineer would flag."""
+
+    def test_categorical_dtype_preserved(self) -> None:
+        """DataFrame with CategoricalDtype column preserves dtype after round-trip."""
+        import pandas as pd
+        from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+        serde = JsonPlusSerializer()
+        df = pd.DataFrame(
+            {
+                "category": pd.Categorical(["a", "b", "a", "c"], categories=["a", "b", "c"]),
+                "value": [10, 20, 30, 40],
+            }
+        )
+
+        serialized = serde.dumps({"df": df})
+        result = serde.loads(serialized)
+
+        assert isinstance(result["df"], pd.DataFrame)
+        assert result["df"]["category"].dtype.name == "category", (
+            f"Expected category dtype, got {result['df']['category'].dtype}"
+        )
+        assert list(result["df"]["category"]) == ["a", "b", "a", "c"]
+
+    def test_series_with_multiindex(self) -> None:
+        """Series with MultiIndex on rows preserves index structure."""
+        import pandas as pd
+        from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+        serde = JsonPlusSerializer()
+        arrays = [["bar", "bar", "baz"], ["one", "two", "one"]]
+        index = pd.MultiIndex.from_arrays(arrays, names=["first", "second"])
+        s = pd.Series([10, 20, 30], index=index, name="vals")
+
+        serialized = serde.dumps({"s": s})
+        result = serde.loads(serialized)
+
+        pd.testing.assert_series_equal(result["s"], s)

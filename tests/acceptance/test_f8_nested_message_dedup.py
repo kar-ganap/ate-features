@@ -602,3 +602,82 @@ class TestT4Smoke:
 
         assert "mt-turn1" not in streamed_ids, "Nested context message should be deduped"
         assert "mt-resp" in streamed_ids, "New response should be emitted"
+
+
+class TestT5Robustness:
+    """Robustness edge cases — spec-derived tests a QA engineer would flag."""
+
+    def test_same_message_in_flat_and_nested_input(self) -> None:
+        """Message present in both flat list and nested container — deduped from both."""
+        from langgraph.graph import StateGraph
+
+        shared_msg = HumanMessage(content="shared", id="shared-1")
+
+        def process(state: StateWithUnwrap) -> dict:
+            return {
+                "messages": state["context"].history
+                + [AIMessage(content="new", id="shared-new")]
+            }
+
+        graph = StateGraph(StateWithUnwrap)
+        graph.add_node("process", process)
+        graph.set_entry_point("process")
+        graph.set_finish_point("process")
+        compiled = graph.compile()
+
+        events = list(
+            compiled.stream(
+                {
+                    "context": Context(history=[shared_msg]),
+                    "messages": [shared_msg],  # same msg in flat list too
+                },
+                stream_mode="messages",
+            )
+        )
+        streamed = _collect_messages(events)
+        streamed_ids = {m.id for m in streamed}
+
+        assert "shared-1" not in streamed_ids, (
+            f"Message in both flat and nested input should be deduped. Got: {streamed_ids}"
+        )
+        assert "shared-new" in streamed_ids
+
+    def test_many_nested_messages_all_deduped(self) -> None:
+        """10 messages in nested input all deduped when returned flat."""
+        from langgraph.graph import StateGraph
+
+        nested_msgs = [
+            HumanMessage(content=f"msg_{i}", id=f"many-{i}")
+            for i in range(10)
+        ]
+
+        def unwrap(state: StateWithUnwrap) -> dict:
+            return {
+                "messages": state["context"].history
+                + [AIMessage(content="the_new_one", id="many-new")]
+            }
+
+        graph = StateGraph(StateWithUnwrap)
+        graph.add_node("unwrap", unwrap)
+        graph.set_entry_point("unwrap")
+        graph.set_finish_point("unwrap")
+        compiled = graph.compile()
+
+        events = list(
+            compiled.stream(
+                {
+                    "context": Context(history=nested_msgs),
+                    "messages": [],
+                },
+                stream_mode="messages",
+            )
+        )
+        streamed = _collect_messages(events)
+        streamed_ids = {m.id for m in streamed}
+
+        # All 10 nested input messages should be deduped
+        for i in range(10):
+            assert f"many-{i}" not in streamed_ids, (
+                f"Nested input message many-{i} should be deduped"
+            )
+        assert "many-new" in streamed_ids, "New message should be emitted"

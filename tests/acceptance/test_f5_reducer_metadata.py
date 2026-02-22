@@ -331,3 +331,59 @@ class TestT4Smoke:
 
         result = compiled.invoke({"count": 0, "log": []})
         assert result["log"] == ["step_0", "step_1", "step_2"]
+
+
+class TestT5Robustness:
+    """Robustness edge cases — spec-derived tests a QA engineer would flag."""
+
+    def test_reducer_position_2_of_4_metadata(self) -> None:
+        """Annotated[list, "a", add, "b", 99] — reducer at position 2 of 4 metadata items."""
+        from langgraph.graph import StateGraph
+
+        class State(TypedDict):
+            items: Annotated[list[str], "doc_string", operator.add, "extra", 42]
+
+        def node_a(state: State) -> dict:
+            return {"items": ["a"]}
+
+        def node_b(state: State) -> dict:
+            return {"items": ["b"]}
+
+        graph = StateGraph(State)
+        graph.add_node("a", node_a)
+        graph.add_node("b", node_b)
+        graph.add_edge("a", "b")
+        graph.set_entry_point("a")
+        graph.set_finish_point("b")
+        compiled = graph.compile()
+
+        result = compiled.invoke({"items": []})
+        assert result["items"] == ["a", "b"], (
+            f"Reducer in position 2 of 4 metadata: expected ['a', 'b'], got {result['items']}"
+        )
+
+    def test_int_reducer_with_trailing_metadata(self) -> None:
+        """Annotated[int, add, "description"] — non-list type with non-last reducer."""
+        from langgraph.graph import StateGraph
+
+        class State(TypedDict):
+            total: Annotated[int, operator.add, "Running total"]
+
+        def add_5(state: State) -> dict:
+            return {"total": 5}
+
+        def add_3(state: State) -> dict:
+            return {"total": 3}
+
+        graph = StateGraph(State)
+        graph.add_node("a", add_5)
+        graph.add_node("b", add_3)
+        graph.add_edge("a", "b")
+        graph.set_entry_point("a")
+        graph.set_finish_point("b")
+        compiled = graph.compile()
+
+        result = compiled.invoke({"total": 10})
+        assert result["total"] == 18, (
+            f"Int reducer with trailing metadata: expected 18, got {result['total']}"
+        )

@@ -271,3 +271,58 @@ class TestT4Smoke:
         assert len(result["statuses"]) == 3
         assert all(isinstance(s, Status) for s in result["statuses"])
         assert result["statuses"] == [Status.ACTIVE, Status.INACTIVE, Status.ACTIVE]
+
+
+class TestT5Robustness:
+    """Robustness edge cases — spec-derived tests a QA engineer would flag."""
+
+    def test_enum_four_levels_deep(self) -> None:
+        """Enum inside list inside dict inside dataclass — 4-level nesting."""
+        from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+        @dataclasses.dataclass
+        class Wrapper:
+            metadata: dict
+
+        serde = JsonPlusSerializer()
+        data = {
+            "wrapper": Wrapper(
+                metadata={"items": [Status.ACTIVE, Priority.HIGH]}
+            )
+        }
+
+        serialized = serde.dumps(data)
+        result = serde.loads(serialized)
+
+        items = result["wrapper"].metadata["items"]
+        assert isinstance(items[0], Status), f"Expected Status, got {type(items[0])}"
+        assert isinstance(items[1], Priority), f"Expected Priority, got {type(items[1])}"
+
+    def test_enum_in_pydantic_model_list(self) -> None:
+        """List of Pydantic models each containing enum fields."""
+        from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+        from pydantic import BaseModel
+
+        class TaskItem(BaseModel):
+            label: str
+            status: Status
+            priority: Priority
+
+        serde = JsonPlusSerializer()
+        data = {
+            "tasks": [
+                TaskItem(label="a", status=Status.ACTIVE, priority=Priority.HIGH),
+                TaskItem(label="b", status=Status.INACTIVE, priority=Priority.LOW),
+            ]
+        }
+
+        serialized = serde.dumps(data)
+        result = serde.loads(serialized)
+
+        for task in result["tasks"]:
+            assert isinstance(task.status, Status), (
+                f"Expected Status, got {type(task.status)}"
+            )
+            assert isinstance(task.priority, Priority), (
+                f"Expected Priority, got {type(task.priority)}"
+            )

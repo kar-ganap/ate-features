@@ -381,3 +381,58 @@ class TestT4Smoke:
         state = compiled.get_state(config)
 
         assert state.values["history"] == ["session_start", "turn_0", "turn_1"]
+
+
+class TestT5Robustness:
+    """Robustness edge cases — spec-derived tests a QA engineer would flag."""
+
+    def test_factory_returning_nested_structure(self) -> None:
+        """default_factory returning a complex nested dict as initial value."""
+        from langgraph.graph import StateGraph
+
+        def merge_dicts(a: dict, b: dict) -> dict:
+            return {**a, **b}
+
+        @dataclass
+        class State:
+            config: Annotated[dict, merge_dicts] = field(
+                default_factory=lambda: {"level": 1, "tags": ["base"], "nested": {"a": 1}}
+            )
+
+        def updater(state: State) -> dict:
+            return {"config": {"tags": ["updated"], "extra": True}}
+
+        graph = StateGraph(State)
+        graph.add_node("work", updater)
+        graph.set_entry_point("work")
+        graph.set_finish_point("work")
+        compiled = graph.compile()
+
+        result = compiled.invoke({})
+        # Factory default should be the starting point, then merged with updater
+        assert result["config"]["tags"] == ["updated"], (
+            f"Expected merged tags, got {result['config']}"
+        )
+        assert result["config"]["extra"] is True
+
+    def test_plain_default_value_with_reducer(self) -> None:
+        """Plain default= (not factory) on a field with a reducer."""
+        from langgraph.graph import StateGraph
+
+        @dataclass
+        class State:
+            counter: Annotated[int, operator.add] = 10
+
+        def add_5(state: State) -> dict:
+            return {"counter": 5}
+
+        graph = StateGraph(State)
+        graph.add_node("work", add_5)
+        graph.set_entry_point("work")
+        graph.set_finish_point("work")
+        compiled = graph.compile()
+
+        result = compiled.invoke({})
+        assert result["counter"] == 15, (
+            f"Expected default(10) + node(5) = 15, got {result['counter']}"
+        )

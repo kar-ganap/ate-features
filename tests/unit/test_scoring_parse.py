@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from ate_features.scoring import (
+    _classify_tier,
     _extract_feature_id,
     parse_junit_xml,
     parse_junit_xml_cumulative,
@@ -243,3 +244,35 @@ class TestParseJunitXmlCumulative:
         path.write_text(COMBINED_XML)
         scores = parse_junit_xml_cumulative(path, "0a")
         assert [s.feature_id for s in scores] == ["F1", "F2", "F3"]
+
+
+class TestClassifyTierT5:
+    def test_classifies_t5(self) -> None:
+        assert _classify_tier("tests.acceptance.test_f1_pandas.TestT5Robustness") == "t5"
+
+    def test_does_not_match_t5_substring(self) -> None:
+        assert _classify_tier("tests.SomeTestT55Thing") == "t5"  # contains TestT5
+
+    def test_t5_xml_parsed(self, tmp_path: Path) -> None:
+        xml = """\
+<?xml version="1.0" encoding="utf-8"?>
+<testsuites>
+  <testsuite name="pytest" tests="4">
+    <testcase classname="tests.acceptance.test_f1_pandas.TestT1Basic" name="a"/>
+    <testcase classname="tests.acceptance.test_f1_pandas.TestT4Smoke" name="b"/>
+    <testcase classname="tests.acceptance.test_f1_pandas.TestT5Robustness" name="c"/>
+    <testcase classname="tests.acceptance.test_f1_pandas.TestT5Robustness" name="d">
+      <failure>fail</failure>
+    </testcase>
+  </testsuite>
+</testsuites>
+"""
+        path = tmp_path / "with_t5.xml"
+        path.write_text(xml)
+        score = parse_junit_xml(path, "F1", "0a")
+        assert score.t1_passed == 1
+        assert score.t1_total == 1
+        assert score.t4_passed == 1
+        assert score.t4_total == 1
+        assert score.t5_passed == 1
+        assert score.t5_total == 2

@@ -272,3 +272,48 @@ class TestT4Smoke:
         assert len(result["colors"]) == 3
         assert all(isinstance(c, Color) for c in result["colors"])
         assert result["colors"] == [Color.RED, Color.GREEN, Color.BLUE]
+
+
+class TestT5Robustness:
+    """Robustness edge cases — spec-derived tests a QA engineer would flag."""
+
+    def test_strenum_as_dict_key(self) -> None:
+        """StrEnum used as a dict key preserves type after round-trip."""
+        from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+        serde = JsonPlusSerializer()
+        data = {"mapping": {Color.RED: "warm", Color.BLUE: "cool"}}
+
+        serialized = serde.dumps(data)
+        result = serde.loads(serialized)
+
+        keys = list(result["mapping"].keys())
+        # At minimum, the key values should be correct
+        assert set(result["mapping"].values()) == {"warm", "cool"}
+        # Ideally, keys are still Color instances
+        for key in keys:
+            assert isinstance(key, Color), (
+                f"Dict key should be Color enum, got {type(key)}: {key!r}"
+            )
+
+    def test_overlapping_strenum_values_distinguished(self) -> None:
+        """Two StrEnum types with identical string values are distinguished."""
+        from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+        class Tag(StrEnum):
+            RED = "red"
+            BLUE = "blue"
+
+        serde = JsonPlusSerializer()
+        # Color.RED.value == "red" and Tag.RED.value == "red" — same string
+        data = {"color": Color.RED, "tag": Tag.RED}
+
+        serialized = serde.dumps(data)
+        result = serde.loads(serialized)
+
+        assert isinstance(result["color"], Color), (
+            f"Expected Color, got {type(result['color'])}"
+        )
+        assert isinstance(result["tag"], Tag), (
+            f"Expected Tag, got {type(result['tag'])}"
+        )

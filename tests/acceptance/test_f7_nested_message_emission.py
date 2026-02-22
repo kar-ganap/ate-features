@@ -532,3 +532,83 @@ class TestT4Smoke:
         streamed = _collect_messages(events)
         contents = [m.content for m in streamed]
         assert "processed" in contents, f"Nested message missing with checkpoint. Got: {contents}"
+
+
+class TestT5Robustness:
+    """Robustness edge cases — spec-derived tests a QA engineer would flag."""
+
+    def test_messages_in_dict_of_dicts(self) -> None:
+        """Messages inside dict→dict→list structure should be found."""
+        from langgraph.graph import StateGraph
+
+        class DeepDictState(TypedDict):
+            data: dict
+            output: Annotated[list[str], operator.add]
+
+        def respond(state: DeepDictState) -> dict:
+            return {
+                "data": {
+                    "section": {
+                        "responses": [AIMessage(content="deep_dict_msg", id="msg-dd")]
+                    }
+                },
+                "output": ["done"],
+            }
+
+        graph = StateGraph(DeepDictState)
+        graph.add_node("respond", respond)
+        graph.set_entry_point("respond")
+        graph.set_finish_point("respond")
+        compiled = graph.compile()
+
+        events = list(
+            compiled.stream(
+                {"data": {}, "output": []},
+                stream_mode="messages",
+            )
+        )
+        streamed = _collect_messages(events)
+        contents = [m.content for m in streamed]
+        assert "deep_dict_msg" in contents, (
+            f"Message in dict-of-dicts not found in stream. Got: {contents}"
+        )
+
+    def test_mixed_message_types_in_nested_container(self) -> None:
+        """HumanMessage and AIMessage in same nested container both emitted."""
+        from langchain_core.messages import HumanMessage
+        from langgraph.graph import StateGraph
+
+        class MixedMsgContext(BaseModel):
+            msgs: list[BaseMessage] = []
+
+        class MixedMsgState(TypedDict):
+            ctx: MixedMsgContext
+            output: Annotated[list[str], operator.add]
+
+        def respond(state: MixedMsgState) -> dict:
+            return {
+                "ctx": MixedMsgContext(
+                    msgs=[
+                        HumanMessage(content="user_q", id="msg-human"),
+                        AIMessage(content="ai_reply", id="msg-ai"),
+                    ]
+                ),
+                "output": ["done"],
+            }
+
+        graph = StateGraph(MixedMsgState)
+        graph.add_node("respond", respond)
+        graph.set_entry_point("respond")
+        graph.set_finish_point("respond")
+        compiled = graph.compile()
+
+        events = list(
+            compiled.stream(
+                {"ctx": MixedMsgContext(), "output": []},
+                stream_mode="messages",
+            )
+        )
+        streamed = _collect_messages(events)
+        contents = [m.content for m in streamed]
+        assert "user_q" in contents, f"HumanMessage not found. Got: {contents}"
+        assert "ai_reply" in contents, f"AIMessage not found. Got: {contents}"
