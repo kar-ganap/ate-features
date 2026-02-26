@@ -34,6 +34,11 @@ uv run ate-features exec status
 uv run ate-features score show
 ```
 
+## Built On
+
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview) — agentic coding tool
+- [Agent Teams & Subagents](https://docs.anthropic.com/en/docs/claude-code/sub-agents) — the multi-agent infrastructure under study
+
 ## Validation Gates
 
 ```bash
