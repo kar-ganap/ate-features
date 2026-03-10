@@ -14,6 +14,7 @@ Second in the [ate-series](https://github.com/kar-ganap/ate-series). Predecessor
 [ate](https://github.com/kar-ganap/ate) (bug-fixing in Ruff). Successor:
 [ate-arch](https://github.com/kar-ganap/ate-arch) (architecture design — first
 significant result).
+Full write-up: [paper](https://github.com/kar-ganap/ate-series/blob/main/paper/main.pdf).
 
 ## Results at a Glance
 
